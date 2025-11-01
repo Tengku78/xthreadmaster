@@ -2,7 +2,7 @@ import streamlit as st
 import google.generativeai as genai  # ← THIS LINE WAS MISSING!
 
 # === CONFIG (LOCAL TESTING) ===
-genai.configure(api_key="AIzaSyBQVIGzuFi-gaCP1g7EB3dFELE2Mi0yCvc")
+genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
 st.set_page_config(page_title="XThreadMaster", page_icon="rocket", layout="centered")
 st.title("XThreadMaster – Viral X Threads in 10s")
