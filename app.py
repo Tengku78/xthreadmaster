@@ -46,7 +46,7 @@ if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
 
             # === PRO UPSELL ===
             with st.expander("Go PRO: Unlimited + Scheduler ($9/mo)"):
-                st.markdown("**[Buy Now – Instant Access](https://buy.stripe.com/test_123)**")
+                st.markdown("**[Buy Now – Instant Access](https://buy.stripe.com/bJe5kEb5R8rm8Gc9pJ28800)**")
                 st.caption("Pro: No limits, auto-post to X, analytics")
     else:
         st.warning("Enter a topic first!")
