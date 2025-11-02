@@ -1,38 +1,33 @@
 import streamlit as st
 import google.generativeai as genai
 import requests
-import os
 import tweepy
 from datetime import date
 
 # === CONFIG ===
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
-# === SAFE MODEL SELECTION ===
+# === SAFE MODEL SELECTION (No UI tests to avoid crashes) ===
 @st.cache_resource
 def get_model():
-    try:
-        model = genai.GenerativeModel('gemini-2.0-flash')
-        model.generate_content("test")  # Quick access test
-        st.toast("Using gemini-2.0-flash", icon="Success")
-        return model
-    except Exception as e:
-        st.warning(f"gemini-2.0-flash not available: {e}")
+    models_to_try = [
+        'gemini-1.5-flash',  # Stable default
+        'gemini-1.5-pro',    # Reliable fallback
+        # 'gemini-2.0-flash',  # Uncomment when your project has access
+    ]
+    for model_name in models_to_try:
         try:
-            model = genai.GenerativeModel('gemini-1.5-flash')
-            model.generate_content("test")
-            st.toast("Fallback to gemini-1.5-flash", icon="Success")
+            model = genai.GenerativeModel(model_name)
+            # Silent test: Just instantiate, no generate_content call
             return model
-        except Exception as e2:
-            st.error("Gemini API Error")
-            st.error("1. Check `GEMINI_API_KEY` in Secrets")
-            st.error("2. Enable Generative AI API in Google Cloud")
-            st.error("3. Enable billing")
-            st.stop()
+        except Exception:
+            continue
+    st.error("No Gemini model available. Check your API key/project in Google Cloud.")
+    st.stop()
 
 model = get_model()
 
-st.set_page_config(page_title="XThreadMaster", page_icon="rocket", layout="centered")
+st.set_page_config(page_title="XThreadMaster", page_icon="🚀", layout="centered")
 st.title("XThreadMaster – Viral X Threads in 10s")
 st.markdown("**Generate, download, or auto-post to your X account.**")
 
@@ -49,12 +44,10 @@ with col2:
 length = st.slider("Thread Length", 5, 15, 8, help="Number of tweets")
 
 # === DAILY FREE LIMIT (session_state) ===
-def init_daily_limit():
-    if "gen_count" not in st.session_state:
-        st.session_state.gen_count = 0
-        st.session_state.last_reset = date.today()
+if "gen_count" not in st.session_state:
+    st.session_state.gen_count = 0
+    st.session_state.last_reset = date.today()
 
-init_daily_limit()
 today = date.today()
 if st.session_state.last_reset != today:
     st.session_state.gen_count = 0
@@ -80,17 +73,16 @@ def is_pro_user(email):
             if subs:
                 return True
         return False
-    except Exception as e:
-        st.error(f"Pro check failed: {e}")
+    except Exception:
         return False
 
 pro = is_pro_user(email)
 
-# === X OAUTH LOGIN (URL-BASED, NO SESSION LOSS) ===
+# === X OAUTH LOGIN ===
 def handle_x_oauth():
     # === CALLBACK: After X redirect ===
     if "oauth_verifier" in st.query_params:
-        verifier = st.query_params["oauth_verifier"]
+        verifier = st.query_params["oauth_verifier"][0] if isinstance(st.query_params["oauth_verifier"], list) else st.query_params["oauth_verifier"]
         
         if "oauth_token" in st.session_state and "oauth_token_secret" in st.session_state:
             auth = tweepy.OAuth1UserHandler(
@@ -120,8 +112,7 @@ def handle_x_oauth():
 
                 # Cleanup
                 for k in ["oauth_token", "oauth_token_secret"]:
-                    if k in st.session_state:
-                        del st.session_state[k]
+                    st.session_state.pop(k, None)
                 st.query_params.clear()
                 st.rerun()
             except Exception as e:
@@ -142,6 +133,7 @@ def handle_x_oauth():
                 st.session_state.oauth_token = auth.request_token['oauth_token']
                 st.session_state.oauth_token_secret = auth.request_token['oauth_token_secret']
                 st.markdown(f"[Login to X]({auth_url})")
+                st.rerun()
             except Exception as e:
                 st.error(f"Login failed: {e}")
 
@@ -169,7 +161,7 @@ if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
         if st.session_state.gen_count >= 3:
             st.error("Free limit: 3/day. Upgrade to Pro for unlimited.")
             with st.expander("Upgrade to Pro ($12/mo)"):
-                st.markdown("**[Buy Now](https://buy.stripe.com/bJe5kEb5R8rm8Gc9pJ28800)**")
+                st.markdown("**[Buy Now](https://buy.stripe.com/bJe5kEb5R8rm8Gc9pJ)**")
             st.stop()
         st.session_state.gen_count += 1
         remaining = 3 - st.session_state.gen_count
@@ -194,8 +186,10 @@ if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
         try:
             response = model.generate_content(prompt)
             thread = response.text.strip()
+            if not thread:
+                raise ValueError("Empty response from model")
         except Exception as e:
-            st.error(f"Generation failed: {e}")
+            st.error(f"Generation failed: {e}. Try a different topic or check your API key.")
             st.stop()
 
     st.session_state.thread = thread
@@ -206,30 +200,10 @@ if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
 if "thread" in st.session_state:
     thread = st.session_state.thread
 
-    st.markdown(
-        f"""
-        <div style="
-            background-color: #1a1a1a;
-            color: #ffffff;
-            padding: 20px;
-            border-radius: 16px;
-            border: 1px solid #333;
-            font-family: 'Courier New', monospace;
-            font-size: 16px;
-            line-height: 1.7;
-            max-height: 600px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        ">
-        {thread.replace(chr(10), '<br>')}
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    # Fixed display: Use st.code for pre-wrap, no HTML hacks
+    st.code(thread, language="text")
 
-    st.download_button("Download .txt", thread, "xthread.txt", "text/plain")
+    st.download_button("📥 Download .txt", thread, "xthread.txt", "text/plain")
 
     # === AUTO-POST (ONLY PRO + LOGGED IN) ===
     if pro and st.session_state.get("x_logged_in"):
@@ -242,7 +216,7 @@ if "thread" in st.session_state:
                         access_token=st.session_state.x_access_token,
                         access_token_secret=st.session_state.x_access_secret
                     )
-                    tweets = [t for t in thread.split("\n") if t.strip()]
+                    tweets = [t.strip() for t in thread.split("\n") if t.strip()]
                     if not tweets:
                         st.error("No tweets to post.")
                         st.stop()
@@ -268,7 +242,7 @@ if "thread" in st.session_state:
     # === UPSELL ===
     if not pro:
         with st.expander("Upgrade to Pro ($12/mo)"):
-            st.markdown("**[Buy Now](https://buy.stripe.com/bJe5kEb5R8rm8Gc9pJ28800)**")
+            st.markdown("**[Buy Now](https://buy.stripe.com/bJe5kEb5R8rm8Gc9pJ)**")
 
 # === FOOTER ===
 st.markdown("---")
