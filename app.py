@@ -7,22 +7,37 @@ from datetime import date
 # === CONFIG ===
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
-# === SAFE MODEL SELECTION (No UI tests to avoid crashes) ===
+# === SAFE MODEL SELECTION (Updated for 2025 models) ===
 @st.cache_resource
 def get_model():
+    # List available models first to find supported ones
+    try:
+        available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+        st.info(f"Available models: {available_models[:5]}...")  # Show first 5 for debug
+    except Exception as e:
+        st.error(f"Failed to list models: {e}")
+        st.stop()
+
     models_to_try = [
-        'gemini-1.5-flash',  # Stable default
-        'gemini-1.5-pro',    # Reliable fallback
-        # 'gemini-2.0-flash',  # Uncomment when your project has access
+        'gemini-2.0-flash',      # Your original, likely available now
+        'gemini-2.5-flash',      # New 2025 standard
+        'gemini-2.5-pro',        # Powerful fallback
+        # 'gemini-1.5-flash',   # Deprecated, avoid
     ]
+    
     for model_name in models_to_try:
         try:
             model = genai.GenerativeModel(model_name)
-            # Silent test: Just instantiate, no generate_content call
-            return model
+            # Quick silent test
+            test_response = model.generate_content("test")
+            if test_response.text:
+                st.success(f"Using {model_name}")
+                return model
         except Exception:
             continue
-    st.error("No Gemini model available. Check your API key/project in Google Cloud.")
+    
+    st.error("No supported Gemini model found. Check your API key, project, and billing.")
+    st.error("Available models (from list): See info above.")
     st.stop()
 
 model = get_model()
