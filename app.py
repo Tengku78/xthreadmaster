@@ -1,6 +1,7 @@
 import streamlit as st
 import google.generativeai as genai
 import requests
+import os
 
 # === CONFIG ===
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
@@ -9,6 +10,9 @@ model = genai.GenerativeModel('gemini-2.0-flash')
 st.set_page_config(page_title="XThreadMaster", page_icon="rocket", layout="centered")
 st.title("XThreadMaster – Viral X Threads in 10s")
 st.markdown("**Enter topic → Get full thread (hook, value, CTA) – Copy & Post!**")
+
+# === EMAIL INPUT (OUTSIDE BUTTON) ===
+email = st.text_input("Enter your email (for Pro unlock)", placeholder="your@email.com")
 
 # === INPUTS ===
 col1, col2 = st.columns(2)
@@ -19,50 +23,61 @@ with col2:
 
 length = st.slider("Thread Length", 5, 15, 8, help="Number of tweets")
 
-# === STRIPE PRO CHECK (via email) ===
-def is_pro_user():
-    email = st.text_input("Enter your email (for Pro unlock)", key="email_input")
-    if email:
-        try:
-            # Check if email has active subscription
-            response = requests.get(
-                "https://api.stripe.com/v1/customers",
-                params={"email": email},
+# === STRIPE PRO CHECK ===
+def is_pro_user(email):
+    if not email:
+        return False
+    try:
+        response = requests.get(
+            "https://api.stripe.com/v1/customers",
+            params={"email": email},
+            auth=(st.secrets["STRIPE_SECRET_KEY"], "")
+        )
+        customers = response.json().get("data", [])
+        for cust in customers:
+            subs = requests.get(
+                f"https://api.stripe.com/v1/subscriptions",
+                params={"customer": cust["id"], "status": "active"},
                 auth=(st.secrets["STRIPE_SECRET_KEY"], "")
-            )
-            customers = response.json().get("data", [])
-            for cust in customers:
-                subs = requests.get(
-                    f"https://api.stripe.com/v1/subscriptions",
-                    params={"customer": cust["id"], "status": "active"},
-                    auth=(st.secrets["STRIPE_SECRET_KEY"], "")
-                ).json().get("data", [])
-                if subs:
-                    st.session_state.pro = True
-                    st.success(f"Pro unlocked for {email}!")
-                    return True
-            st.warning("No active Pro subscription found.")
-        except:
-            st.error("Pro check failed. Try again.")
-    return False
+            ).json().get("data", [])
+            if subs:
+                return True
+        return False
+    except:
+        return False
+
+pro = is_pro_user(email)
+if pro:
+    st.success(f"Pro unlocked for {email}! Unlimited access.")
+elif email:
+    st.warning("No active Pro subscription. Using free tier.")
 
 # === GENERATE ===
 if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
     if topic.strip():
-        # Check Pro status
-        pro = st.session_state.get("pro", False) or is_pro_user()
-        
-        # Free limit
+        # === FREE TIER LIMIT (FILE-BASED) ===
         if not pro:
-            if "generations" not in st.session_state:
-                st.session_state.generations = 0
-                st.session_state.daily_limit = 3
-            if st.session_state.generations >= st.session_state.daily_limit:
+            limit_file = ".generations"
+            if os.path.exists(limit_file):
+                with open(limit_file, "r") as f:
+                    generations = int(f.read())
+            else:
+                generations = 0
+
+            if generations >= 3:
                 st.error("Free limit reached (3/day)! Upgrade to Pro.")
                 with st.expander("Go PRO: Unlimited ($12/mo)"):
                     st.markdown("**[Buy Now](https://buy.stripe.com/bJe5kEb5R8rm8Gc9pJ28800)**")
                 st.stop()
 
+            # Increment after generation
+            generations += 1
+            with open(limit_file, "w") as f:
+                f.write(str(generations))
+            remaining = 3 - generations
+            st.success(f"Thread ready! ({remaining} free left today)")
+
+        # === GENERATE THREAD ===
         with st.spinner("Cooking viral thread..."):
             prompt = f"""
             Write a VIRAL X thread about: "{topic}"
@@ -79,30 +94,23 @@ if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
             response = model.generate_content(prompt)
             thread = response.text.strip()
             
-            if not pro:
-                st.session_state.generations += 1
-                remaining = st.session_state.daily_limit - st.session_state.generations
-                st.success(f"Thread ready! ({remaining} free left)")
-            else:
-                st.success("Pro Thread Ready – Unlimited!")
-            
             st.markdown(f"```markdown\n{thread}\n```")
             st.code(thread, language=None)
             
-            # Auto-post button (Pro only)
+            # === PRO FEATURES ===
             if pro:
-                if st.button("Post to X (Pro)"):
-                    st.write("X posting coming in v2!")
+                st.success("Pro Thread Ready – Unlimited!")
+                if st.button("Post to X (Pro Feature)"):
+                    st.write("Auto-post coming in v2!")
                     st.balloons()
 
-        # Upsell
+        # === UPSELL (FREE USERS ONLY) ===
         if not pro:
             with st.expander("Go PRO: Unlimited + Auto-Post ($12/mo)"):
                 st.markdown("**[Buy Now](https://buy.stripe.com/bJe5kEb5R8rm8Gc9pJ28800)**")
-                st.caption("Cancel anytime.")
 
     else:
-        st.warning("Enter a topic!")
+        st.warning("Enter a topic first!")
 
 # === FOOTER ===
 st.markdown("---")
