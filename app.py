@@ -95,7 +95,27 @@ if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
             response = model.generate_content(prompt)
             thread = response.text.strip()
             
-            st.markdown(f"```markdown\n{thread}\n```")
+            # === FULL WIDTH, TALL, SCROLLABLE THREAD BOX ===
+            st.markdown(
+                f"""
+                <div style="
+                    background-color: #f8f9fa;
+                    padding: 16px;
+                    border-radius: 12px;
+                    border: 1px solid #e0e0e0;
+                    font-family: 'Courier New', monospace;
+                    font-size: 15px;
+                    line-height: 1.6;
+                    max-height: 500px;
+                    overflow-y: auto;
+                    white-space: pre-wrap;
+                    word-wrap: break-word;
+                ">
+                {thread}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
             st.code(thread, language=None)
             
             # === PRO FEATURES ===
