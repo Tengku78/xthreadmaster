@@ -117,21 +117,19 @@ if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
             unsafe_allow_html=True
         )
 
-        # === COPY BUTTON ===
-        if st.button("📋 Copy Thread", key="copy_thread"):
-            st.markdown(
-                f"""
-                <textarea id="thread_text" style="position:absolute; left:-9999px">{thread}</textarea>
-                <script>
-                const text = document.getElementById('thread_text').value;
-                navigator.clipboard.writeText(text).then(() => {{
-                    parent.document.querySelector('.stAlert').innerText = 'Copied to clipboard!';
-                }});
-                </script>
-                """,
-                unsafe_allow_html=True
+        # === COPY + DOWNLOAD BUTTONS ===
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("📋 Copy Thread", key="copy"):
+                st.code(thread, language=None)
+                st.success("Copied! Paste into X.")
+        with col2:
+            st.download_button(
+                label="📥 Download .txt",
+                data=thread,
+                file_name="xthread.txt",
+                mime="text/plain"
             )
-            st.success("Copied to clipboard! Paste into X.")
 
         # === STATUS ===
         if not pro:
@@ -142,7 +140,7 @@ if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
         # === UPSELL ===
         if not pro:
             with st.expander("Go PRO: Unlimited ($12/mo)"):
-                st.markdown("**[Buy Now](https://buy.stripe.com/bJe5kEb5R8rm8 IuJ28800)**")
+                st.markdown("**[Buy Now](https://buy.stripe.com/bJe5kEb5R8rm8Gc9pJ28800)**")
 
     else:
         st.warning("Enter a topic first!")
