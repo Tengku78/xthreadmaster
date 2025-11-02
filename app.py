@@ -75,7 +75,6 @@ if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
             with open(limit_file, "w") as f:
                 f.write(str(generations))
             remaining = 3 - generations
-            st.success(f"Thread ready! ({remaining} free left today)")
 
         # === GENERATE THREAD ===
         with st.spinner("Cooking viral thread..."):
@@ -94,38 +93,47 @@ if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
             """
             response = model.generate_content(prompt)
             thread = response.text.strip()
-            
-            # === FULL WIDTH, TALL, SCROLLABLE THREAD BOX ===
-            st.markdown(
-                f"""
-                <div style="
-                    background-color: #1a1a1a;
-                    color: #ffffff;
-                    padding: 20px;
-                    border-radius: 16px;
-                    border: 1px solid #333;
-                    font-family: 'Courier New', monospace;
-                    font-size: 16px;
-                    line-height: 1.7;
-                    max-height: 600px;
-                    overflow-y: auto;
-                    white-space: pre-wrap;
-                    word-wrap: break-word;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-                ">
-                {thread}
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
+
+        # === SINGLE, CLEAN THREAD BOX ===
+        st.markdown(
+            f"""
+            <div style="
+                background-color: #1a1a1a;
+                color: #ffffff;
+                padding: 20px;
+                border-radius: 16px;
+                border: 1px solid #333;
+                font-family: 'Courier New', monospace;
+                font-size: 16px;
+                line-height: 1.7;
+                max-height: 600px;
+                overflow-y: auto;
+                white-space: pre-wrap;
+                word-wrap: break-word;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            ">
+            {thread}
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        # === COPY BUTTON ===
+        if st.button("📋 Copy Thread", key="copy_thread"):
             st.code(thread, language=None)
-            
-            # === PRO FEATURES ===
-            if pro:
-                st.success("Pro Thread Ready – Unlimited!")
-                if st.button("Post to X (Pro Feature)"):
-                    st.write("Auto-post coming in v2!")
-                    st.balloons()
+            st.success("Copied! Paste into X.")
+
+        # === STATUS MESSAGE ===
+        if not pro:
+            st.success(f"Thread ready! ({remaining} free left today)")
+        else:
+            st.success("Pro Thread Ready – Unlimited!")
+
+        # === PRO FEATURES ===
+        if pro:
+            if st.button("Post to X (Pro Feature)"):
+                st.write("Auto-post coming in v2!")
+                st.balloons()
 
         # === UPSELL (FREE USERS ONLY) ===
         if not pro:
