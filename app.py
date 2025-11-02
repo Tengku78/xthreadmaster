@@ -7,37 +7,49 @@ from datetime import date
 # === CONFIG ===
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
-# === SAFE MODEL SELECTION (Updated for 2025 models) ===
+# === SAFE MODEL SELECTION (Dynamic based on available models) ===
 @st.cache_resource
 def get_model():
-    # List available models first to find supported ones
     try:
-        available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-        st.info(f"Available models: {available_models[:5]}...")  # Show first 5 for debug
+        # List available models dynamically
+        available_models = [m.name.split('/')[-1] for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+        st.info(f"Available models detected: {available_models[:5]}...")  # Debug info
     except Exception as e:
         st.error(f"Failed to list models: {e}")
         st.stop()
 
+    # Try common 2025 models in order of preference
     models_to_try = [
-        'gemini-2.0-flash',      # Your original, likely available now
-        'gemini-2.5-flash',      # New 2025 standard
-        'gemini-2.5-pro',        # Powerful fallback
-        # 'gemini-1.5-flash',   # Deprecated, avoid
+        'gemini-2.0-flash-exp',  # Experimental, as in your original
+        'gemini-2.5-flash',      # Standard fast model
+        'gemini-2.5-pro',        # Powerful model
+        'gemini-1.5-pro',        # Legacy fallback if needed
     ]
     
     for model_name in models_to_try:
+        if model_name in available_models:
+            try:
+                model = genai.GenerativeModel(model_name)
+                # Quick silent test
+                test_response = model.generate_content("test")
+                if test_response and test_response.text:
+                    st.success(f"Using {model_name}")
+                    return model
+            except Exception:
+                continue
+    
+    # If none work, pick the first available that supports generateContent
+    for model_name in available_models:
         try:
             model = genai.GenerativeModel(model_name)
-            # Quick silent test
             test_response = model.generate_content("test")
-            if test_response.text:
-                st.success(f"Using {model_name}")
+            if test_response and test_response.text:
+                st.success(f"Using available model: {model_name}")
                 return model
         except Exception:
             continue
     
-    st.error("No supported Gemini model found. Check your API key, project, and billing.")
-    st.error("Available models (from list): See info above.")
+    st.error("No supported Gemini model found. Check your API key, project, and billing in Google AI Studio.")
     st.stop()
 
 model = get_model()
@@ -96,9 +108,11 @@ pro = is_pro_user(email)
 # === X OAUTH LOGIN ===
 def handle_x_oauth():
     # === CALLBACK: After X redirect ===
-    if "oauth_verifier" in st.query_params:
-        verifier = st.query_params["oauth_verifier"][0] if isinstance(st.query_params["oauth_verifier"], list) else st.query_params["oauth_verifier"]
+    query_params = st.query_params.to_dict()
+    if "oauth_verifier" in query_params:
+        verifier = query_params["oauth_verifier"] if isinstance(query_params["oauth_verifier"], str) else query_params["oauth_verifier"][0]
         
+        # Check for request tokens in session_state (set during login)
         if "oauth_token" in st.session_state and "oauth_token_secret" in st.session_state:
             auth = tweepy.OAuth1UserHandler(
                 st.secrets["X_CONSUMER_KEY"],
@@ -125,15 +139,19 @@ def handle_x_oauth():
                 st.session_state.x_username = user.data.username
                 st.success(f"Connected as @{user.data.username}!")
 
-                # Cleanup
+                # Cleanup temp tokens
                 for k in ["oauth_token", "oauth_token_secret"]:
                     st.session_state.pop(k, None)
-                st.query_params.clear()
+                # Clear query params to clean URL
+                for key in query_params:
+                    del st.query_params[key]
                 st.rerun()
             except Exception as e:
-                st.error(f"OAuth failed: {e}")
+                st.error(f"OAuth callback failed: {e}")
+                st.info("This usually means the authorization timed out or tokens expired. Click 'Connect Your X Account' to start over.")
         else:
-            st.error("Session expired. Try logging in again.")
+            st.error("Missing authorization tokens. Session expired—try logging in again.")
+            st.info("This can happen if you take too long between steps. Start the login process fresh.")
 
     # === LOGIN BUTTON ===
     elif not st.session_state.get("x_logged_in", False):
@@ -147,21 +165,28 @@ def handle_x_oauth():
                 auth_url = auth.get_authorization_url(signin_with_twitter=True)
                 st.session_state.oauth_token = auth.request_token['oauth_token']
                 st.session_state.oauth_token_secret = auth.request_token['oauth_token_secret']
-                st.info("Click the link below to authorize your X account.")
-                st.markdown(f"[Login to X]({auth_url})")
-                st.info("After authorizing, you'll be redirected back here automatically.")
+                
+                # Show persistent login instructions
+                st.info("👆 Click the button below to authorize your X account. You'll be redirected back here after.")
+                components.html(f'<a href="{auth_url}" target="_self"><button style="width: 100%; padding: 10px; background: #1DA1F2; color: white; border: none; border-radius: 8px; font-size: 16px;">Authorize with X</button></a>', height=50)
+                
+                st.info("**Tip:** Stay on the same browser tab and complete the authorization quickly to avoid session expiration.")
             except Exception as e:
                 st.error(f"Login setup failed: {e}")
+                st.info("Check your X API keys in secrets.toml.")
 
     # === LOGGED IN ===
     else:
-        st.success(f"Connected as @{st.session_state.x_username}")
-        if st.button("Disconnect"):
-            keys = ["x_access_token", "x_access_secret", "x_username", "x_logged_in"]
-            for k in keys:
-                st.session_state.pop(k, None)
-            st.success("Disconnected!")
-            st.rerun()
+        col1, col2 = st.columns(2)
+        with col1:
+            st.success(f"Connected as @{st.session_state.x_username}")
+        with col2:
+            if st.button("Disconnect", use_container_width=True):
+                keys = ["x_access_token", "x_access_secret", "x_username", "x_logged_in"]
+                for k in keys:
+                    st.session_state.pop(k, None)
+                st.success("Disconnected!")
+                st.rerun()
 
 # Run OAuth
 handle_x_oauth()
@@ -216,7 +241,7 @@ if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
 if "thread" in st.session_state:
     thread = st.session_state.thread
 
-    # Fixed display: Use st.code for pre-wrap, no HTML hacks
+    # Display with st.code for monospace + line breaks
     st.code(thread, language="text")
 
     st.download_button("📥 Download .txt", thread, "xthread.txt", "text/plain")
