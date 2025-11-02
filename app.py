@@ -2,7 +2,7 @@ import streamlit as st
 import google.generativeai as genai
 import requests
 import tweepy
-import streamlit.components.v1 as components  # <-- Added import
+import streamlit.components.v1 as components  # For custom HTML if needed
 from datetime import date
 
 # === CONFIG ===
@@ -55,7 +55,7 @@ def get_model():
 
 model = get_model()
 
-st.set_page_config(page_title="XThreadMaster", page_icon="rocket", layout="centered")
+st.set_page_config(page_title="XThreadMaster", page_icon="🚀", layout="centered")
 st.title("XThreadMaster – Viral X Threads in 10s")
 st.markdown("**Generate, download, or auto-post to your X account.**")
 
@@ -166,33 +166,11 @@ def handle_x_oauth():
                 st.session_state.oauth_token = auth.request_token['oauth_token']
                 st.session_state.oauth_token_secret = auth.request_token['oauth_token_secret']
                 
-                # Show persistent login instructions
-                st.info("Click the button below to authorize your X account. You'll be redirected back here after.")
-                components.html(
-                    f'''
-                    <div style="text-align: center; margin: 20px 0;">
-                        <a href="{auth_url}" target="_self">
-                            <button style="
-                                width: 100%;
-                                padding: 14px;
-                                background: #1DA1F2;
-                                color: white;
-                                border: none;
-                                border-radius: 12px;
-                                font-size: 18px;
-                                font-weight: bold;
-                                cursor: pointer;
-                                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-                            ">
-                                Authorize with X
-                            </button>
-                        </a>
-                    </div>
-                    ''',
-                    height=100
-                )
+                # Show persistent login instructions with direct markdown link (no iframe/button)
+                st.info("👆 Click the link below to authorize your X account in a new tab. You'll be redirected back here after authorizing.")
+                st.markdown(f"[**Authorize with X**]({auth_url})")
                 
-                st.info("**Tip:** Complete the authorization in under 2 minutes to avoid session timeout.")
+                st.info("**Tip:** Complete the authorization in under 2 minutes to avoid session timeout. If the link opens in a new tab, that's normal—just approve and return here.")
             except Exception as e:
                 st.error(f"Login setup failed: {e}")
                 st.info("Check your X API keys in secrets.toml and ensure callback URL is set to: https://xthreadmaster.streamlit.app")
@@ -266,7 +244,7 @@ if "thread" in st.session_state:
     # Display with st.code for monospace + line breaks
     st.code(thread, language="text")
 
-    st.download_button("Download .txt", thread, "xthread.txt", "text/plain")
+    st.download_button("📥 Download .txt", thread, "xthread.txt", "text/plain")
 
     # === AUTO-POST (ONLY PRO + LOGGED IN) ===
     if pro and st.session_state.get("x_logged_in"):
