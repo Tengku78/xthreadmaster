@@ -19,42 +19,38 @@ col1, col2 = st.columns(2)
 with col1:
     topic = st.text_input("Topic/Niche", placeholder="AI side hustles, fitness tips, etc.")
 with col2:
-    tone = st.selectbox("Tone", ["Casual", "Professional", "Funny", "Inspirational", "Degen"])
+    tone = st.selectbox("Tone", ["Casual", "Professional", "Funny", "Inspirational", "Degen")
 
 length = st.slider("Thread Length", 5, 15, 8, help="Number of tweets")
 
-# === PRO FEATURES ===
+# === PRO CHECK ===
+def is_pro_user(email):
+    if not email:
+        return False
+    try:
+        response = requests.get(
+            "https://api.stripe.com/v1/customers",
+            params={"email": email},
+            auth=(st.secrets["STRIPE_SECRET_KEY"], "")
+        )
+        customers = response.json().get("data", [])
+        for cust in customers:
+            subs = requests.get(
+                f"https://api.stripe.com/v1/subscriptions",
+                params={"customer": cust["id"], "status": "active"},
+                auth=(st.secrets["STRIPE_SECRET_KEY"], "")
+            ).json().get("data", [])
+            if subs:
+                return True
+        return False
+    except:
+        return False
+
+pro = is_pro_user(email)
 if pro:
-    st.success("Pro Thread Ready – Unlimited!")
-
-    if "thread" in st.session_state:
-        thread = st.session_state.thread
-
-        if st.button("📤 Auto-Post to X", key="post_x"):
-            with st.spinner("Posting to X..."):
-                try:
-                    import tweepy
-                    client = tweepy.Client(
-                        consumer_key=st.secrets["X_CONSUMER_KEY"],
-                        consumer_secret=st.secrets["X_CONSUMER_SECRET"],
-                        access_token=st.secrets["X_ACCESS_TOKEN"],
-                        access_token_secret=st.secrets["X_ACCESS_SECRET"]
-                    )
-                    # Post first tweet
-                    first_tweet = thread.split("\n")[0]
-                    response = client.create_tweet(text=first_tweet)
-                    tweet_id = response.data['id']
-                    # Post rest as thread
-                    for line in thread.split("\n")[1:]:
-                        if line.strip():
-                            response = client.create_tweet(in_reply_to_tweet_id=tweet_id, text=line)
-                            tweet_id = response.data['id']
-                    
-                    thread_url = f"https://x.com/tengku5181/status/{response.data['id']}"
-                    st.success(f"Thread posted! [View on X]({thread_url})")
-                    st.balloons()
-                except Exception as e:
-                    st.error(f"Post failed: {e}")
+    st.success(f"Pro unlocked for {email}! Unlimited access.")
+elif email:
+    st.warning("No active Pro subscription. Using free tier.")
 
 # === GENERATE ===
 if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
