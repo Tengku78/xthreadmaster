@@ -75,7 +75,7 @@ if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
                 f.write(str(generations))
             remaining = 3 - generations
 
-        # === GENERATE & SAVE TO SESSION ===
+        # === GENERATE ===
         with st.spinner("Cooking viral thread..."):
             prompt = f"""
             Write a VIRAL X thread about: "{topic}"
@@ -93,14 +93,14 @@ if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
             response = model.generate_content(prompt)
             thread = response.text.strip()
 
-        # Save thread to session
+        # === SAVE TO SESSION ===
         st.session_state.thread = thread
         st.session_state.remaining = remaining if not pro else None
 
     else:
         st.warning("Enter a topic first!")
 
-# === DISPLAY THREAD (PERSISTENT) ===
+# === DISPLAY THREAD + DOWNLOAD ===
 if "thread" in st.session_state:
     thread = st.session_state.thread
 
@@ -128,19 +128,13 @@ if "thread" in st.session_state:
         unsafe_allow_html=True
     )
 
-    # === COPY + DOWNLOAD BUTTONS ===
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("📋 Copy Thread", key="copy"):
-            st.code(thread, language=None)
-            st.success("Copied! Paste into X.")
-    with col2:
-        st.download_button(
-            label="📥 Download .txt",
-            data=thread,
-            file_name="xthread.txt",
-            mime="text/plain"
-        )
+    # === DOWNLOAD ONLY ===
+    st.download_button(
+        label="📥 Download .txt",
+        data=thread,
+        file_name="xthread.txt",
+        mime="text/plain"
+    )
 
     # === STATUS ===
     if not pro:
@@ -152,3 +146,7 @@ if "thread" in st.session_state:
     if not pro:
         with st.expander("Go PRO: Unlimited ($12/mo)"):
             st.markdown("**[Buy Now](https://buy.stripe.com/bJe5kEb5R8rm8Gc9pJ28800)**")
+
+# === FOOTER ===
+st.markdown("---")
+st.caption("**Built with Grok & Streamlit** | First $100 MRR = beer on me.")
