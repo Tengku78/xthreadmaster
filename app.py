@@ -138,19 +138,20 @@ def handle_x_oauth():
     # === LOGIN BUTTON ===
     elif not st.session_state.get("x_logged_in", False):
         if st.button("Connect Your X Account (Pro Feature)"):
-            auth = tweepy.OAuth1UserHandler(
-                st.secrets["X_CONSUMER_KEY"],
-                st.secrets["X_CONSUMER_SECRET"],
-                callback="https://xthreadmaster.streamlit.app"
-            )
             try:
-                auth_url = auth.get_authorization_url()
+                auth = tweepy.OAuth1UserHandler(
+                    st.secrets["X_CONSUMER_KEY"],
+                    st.secrets["X_CONSUMER_SECRET"],
+                    callback="https://xthreadmaster.streamlit.app"
+                )
+                auth_url = auth.get_authorization_url(signin_with_twitter=True)
                 st.session_state.oauth_token = auth.request_token['oauth_token']
                 st.session_state.oauth_token_secret = auth.request_token['oauth_token_secret']
+                st.info("Click the link below to authorize your X account.")
                 st.markdown(f"[Login to X]({auth_url})")
-                st.rerun()
+                st.info("After authorizing, you'll be redirected back here automatically.")
             except Exception as e:
-                st.error(f"Login failed: {e}")
+                st.error(f"Login setup failed: {e}")
 
     # === LOGGED IN ===
     else:
