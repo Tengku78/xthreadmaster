@@ -23,7 +23,7 @@ with col2:
 
 length = st.slider("Thread Length", 5, 15, 8, help="Number of tweets")
 
-# === PRO CHECK ===
+# === PRO CHECK — MOVED UP HERE! ===
 def is_pro_user(email):
     if not email:
         return False
@@ -100,7 +100,7 @@ if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
     else:
         st.warning("Enter a topic first!")
 
-# === DISPLAY THREAD + DOWNLOAD ===
+# === DISPLAY THREAD + PRO FEATURES ===
 if "thread" in st.session_state:
     thread = st.session_state.thread
 
@@ -128,13 +128,41 @@ if "thread" in st.session_state:
         unsafe_allow_html=True
     )
 
-    # === DOWNLOAD ONLY ===
+    # === DOWNLOAD BUTTON ===
     st.download_button(
         label="📥 Download .txt",
         data=thread,
         file_name="xthread.txt",
         mime="text/plain"
     )
+
+    # === AUTO-POST BUTTON (ONLY FOR PRO) ===
+    if pro:
+        if st.button("Auto-Post to X", key="post_x"):
+            with st.spinner("Posting to X..."):
+                try:
+                    import tweepy
+                    client = tweepy.Client(
+                        consumer_key=st.secrets["X_CONSUMER_KEY"],
+                        consumer_secret=st.secrets["X_CONSUMER_SECRET"],
+                        access_token=st.secrets["X_ACCESS_TOKEN"],
+                        access_token_secret=st.secrets["X_ACCESS_SECRET"]
+                    )
+                    # Post first tweet
+                    first_tweet = thread.split("\n")[0]
+                    response = client.create_tweet(text=first_tweet)
+                    tweet_id = response.data['id']
+                    # Post rest as thread
+                    for line in thread.split("\n")[1:]:
+                        if line.strip():
+                            response = client.create_tweet(in_reply_to_tweet_id=tweet_id, text=line)
+                            tweet_id = response.data['id']
+                    
+                    thread_url = f"https://x.com/tengku5181/status/{response.data['id']}"
+                    st.success(f"Thread posted! [View on X]({thread_url})")
+                    st.balloons()
+                except Exception as e:
+                    st.error(f"Post failed: {e}")
 
     # === STATUS ===
     if not pro:
