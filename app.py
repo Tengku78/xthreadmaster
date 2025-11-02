@@ -2,6 +2,8 @@ import streamlit as st
 import google.generativeai as genai
 import requests
 import os
+import tweepy
+from urllib.parse import parse_qs, urlparse
 
 # === CONFIG ===
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
@@ -52,6 +54,36 @@ if pro:
 elif email:
     st.warning("No active Pro subscription. Using free tier.")
 
+# === X OAUTH LOGIN ===
+def get_x_auth():
+    if "oauth_token" not in st.query_params and "x_logged_in" not in st.session_state:
+        if st.button("Connect Your X Account"):
+            auth = tweepy.OAuth1UserHandler(
+                st.secrets["X_CONSUMER_KEY"],
+                st.secrets["X_CONSUMER_SECRET"],
+                callback="https://xthreadmaster.streamlit.app"
+            )
+            auth_url = auth.get_authorization_url()
+            st.session_state.request_token = auth.request_token
+            st.markdown(f"[Login to X]({auth_url})")
+    
+    # Callback
+    if "oauth_token" in st.query_params:
+        verifier = st.query_params["oauth_verifier"]
+        auth = tweepy.OAuth1UserHandler(
+            st.secrets["X_CONSUMER_KEY"],
+            st.secrets["X_CONSUMER_SECRET"]
+        )
+        auth.request_token = st.session_state.request_token
+        access_token = auth.get_access_token(verifier)
+        st.session_state.x_access_token = access_token[0]
+        st.session_state.x_access_secret = access_token[1]
+        st.session_state.x_logged_in = True
+        st.success("X Connected!")
+
+# Run login
+get_x_auth()
+
 # === GENERATE ===
 if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
     if topic.strip():
@@ -93,91 +125,57 @@ if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
             response = model.generate_content(prompt)
             thread = response.text.strip()
 
-        # === SAVE TO SESSION ===
         st.session_state.thread = thread
         st.session_state.remaining = remaining if not pro else None
 
     else:
         st.warning("Enter a topic first!")
 
-# === DISPLAY THREAD + DOWNLOAD ===
+# === DISPLAY THREAD + POST ===
 if "thread" in st.session_state:
     thread = st.session_state.thread
 
-    # === DARK BOX ===
     st.markdown(
         f"""
-        <div style="
-            background-color: #1a1a1a;
-            color: #ffffff;
-            padding: 20px;
-            border-radius: 16px;
-            border: 1px solid #333;
-            font-family: 'Courier New', monospace;
-            font-size: 16px;
-            line-height: 1.7;
-            max-height: 600px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        ">
+        <div style="background-color: #1a1a1a; color: #ffffff; padding: 20px; border-radius: 16px; border: 1px solid #333; font-family: 'Courier New', monospace; font-size: 16px; line-height: 1.7; max-height: 600px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
         {thread}
         </div>
         """,
         unsafe_allow_html=True
     )
 
-    # === DOWNLOAD ===
-    st.download_button(
-        label="📥 Download .txt",
-        data=thread,
-        file_name="xthread.txt",
-        mime="text/plain"
-    )
+    st.download_button("📥 Download .txt", thread, "xthread.txt", "text/plain")
 
-    # === STATUS ===
+    if pro and st.session_state.get("x_logged_in"):
+        if st.button("Auto-Post to X", key="post_x"):
+            with st.spinner("Posting..."):
+                try:
+                    client = tweepy.Client(
+                        consumer_key=st.secrets["X_CONSUMER_KEY"],
+                        consumer_secret=st.secrets["X_CONSUMER_SECRET"],
+                        access_token=st.session_state.x_access_token,
+                        access_token_secret=st.session_state.x_access_secret
+                    )
+                    tweets = thread.split("\n")
+                    first = client.create_tweet(text=tweets[0])
+                    tweet_id = first.data['id']
+                    for t in tweets[1:]:
+                        if t.strip():
+                            resp = client.create_tweet(in_reply_to_tweet_id=tweet_id, text=t)
+                            tweet_id = resp.data['id']
+                    url = f"https://x.com/user/status/{first.data['id']}"
+                    st.success(f"Posted! [View]({url})")
+                except Exception as e:
+                    st.error(f"Failed: {e}")
+
     if not pro:
         st.success(f"Thread ready! ({st.session_state.remaining} free left today)")
     else:
         st.success("Pro Thread Ready – Unlimited!")
 
-    # === UPSELL ===
     if not pro:
         with st.expander("Go PRO: Unlimited ($12/mo)"):
             st.markdown("**[Buy Now](https://buy.stripe.com/bJe5kEb5R8rm8Gc9pJ28800)**")
 
-# === PRO FEATURES ===
-if pro:
-    if "thread" in st.session_state:
-        thread = st.session_state.thread
-
-        if st.button("📤 Auto-Post to X", key="post_x"):
-            with st.spinner("Posting to X..."):
-                try:
-                    import tweepy
-                    client = tweepy.Client(
-                        consumer_key=st.secrets["X_CONSUMER_KEY"],
-                        consumer_secret=st.secrets["X_CONSUMER_SECRET"],
-                        access_token=st.secrets["X_ACCESS_TOKEN"],
-                        access_token_secret=st.secrets["X_ACCESS_SECRET"]
-                    )
-                    # Post first tweet
-                    first_tweet = thread.split("\n")[0]
-                    response = client.create_tweet(text=first_tweet)
-                    tweet_id = response.data['id']
-                    # Post rest as thread
-                    for line in thread.split("\n")[1:]:
-                        if line.strip():
-                            response = client.create_tweet(in_reply_to_tweet_id=tweet_id, text=line)
-                            tweet_id = response.data['id']
-                    
-                    thread_url = f"https://x.com/tengku5181/status/{response.data['id']}"
-                    st.success(f"Thread posted! [View on X]({thread_url})")
-                    st.balloons()
-                except Exception as e:
-                    st.error(f"Post failed: {e}")
-
-# === FOOTER ===
 st.markdown("---")
 st.caption("**Built with Grok & Streamlit** | First $100 MRR = beer on me.")
