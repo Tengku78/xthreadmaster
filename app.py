@@ -136,33 +136,43 @@ if "thread" in st.session_state:
         mime="text/plain"
     )
 
-    # === AUTO-POST BUTTON (ONLY FOR PRO) ===
-    if pro:
-        if st.button("Auto-Post to X", key="post_x"):
-            with st.spinner("Posting to X..."):
-                try:
-                    import tweepy
-                    client = tweepy.Client(
-                        consumer_key=st.secrets["X_CONSUMER_KEY"],
-                        consumer_secret=st.secrets["X_CONSUMER_SECRET"],
-                        access_token=st.secrets["X_ACCESS_TOKEN"],
-                        access_token_secret=st.secrets["X_ACCESS_SECRET"]
-                    )
-                    # Post first tweet
-                    first_tweet = thread.split("\n")[0]
-                    response = client.create_tweet(text=first_tweet)
-                    tweet_id = response.data['id']
-                    # Post rest as thread
-                    for line in thread.split("\n")[1:]:
-                        if line.strip():
-                            response = client.create_tweet(in_reply_to_tweet_id=tweet_id, text=line)
-                            tweet_id = response.data['id']
-                    
-                    thread_url = f"https://x.com/tengku5181/status/{response.data['id']}"
-                    st.success(f"Thread posted! [View on X]({thread_url})")
-                    st.balloons()
-                except Exception as e:
-                    st.error(f"Post failed: {e}")
+    # === USER X LOGIN ===
+if not st.session_state.get("x_logged_in"):
+    if st.button("Connect Your X Account"):
+        # Redirect to X OAuth
+        auth = tweepy.OAuth1UserHandler(
+            st.secrets["X_CONSUMER_KEY"],
+            st.secrets["X_CONSUMER_SECRET"],
+            callback="https://xthreadmaster.streamlit.app"
+        )
+        auth_url = auth.get_authorization_url()
+        st.markdown(f"[Login to X]({auth_url})")
+else:
+    st.success(f"Connected as @{st.session_state.x_username}")
+
+# === AUTO-POST (USER ACCOUNT) ===
+if pro and "thread" in st.session_state and st.session_state.get("x_logged_in"):
+    if st.button("Auto-Post to X", key="post_x"):
+        with st.spinner("Posting..."):
+            try:
+                client = tweepy.Client(
+                    consumer_key=st.secrets["X_CONSUMER_KEY"],
+                    consumer_secret=st.secrets["X_CONSUMER_SECRET"],
+                    access_token=st.session_state.x_access_token,
+                    access_token_secret=st.session_state.x_access_secret
+                )
+                # Post thread
+                tweets = st.session_state.thread.split("\n")
+                first = client.create_tweet(text=tweets[0])
+                tweet_id = first.data['id']
+                for t in tweets[1:]:
+                    if t.strip():
+                        resp = client.create_tweet(in_reply_to_tweet_id=tweet_id, text=t)
+                        tweet_id = resp.data['id']
+                url = f"https://x.com/user/status/{first.data['id']}"
+                st.success(f"Posted! [View]({url})")
+            except Exception as e:
+                st.error(f"Failed: {e}")
 
     # === STATUS ===
     if not pro:
