@@ -108,7 +108,7 @@ def handle_x_oauth():
                 st.error(f"Login setup failed: {e}")
 
     # Step 4: Logged in state
-    elif st.session_state.get("x_logged_in"):
+    else:
         st.success(f"Connected as @{st.session_state.x_username}")
         if st.button("Disconnect X"):
             for key in ["x_access_token", "x_access_secret", "x_username", "x_logged_in"]:
@@ -118,8 +118,6 @@ def handle_x_oauth():
 
 # Run OAuth
 handle_x_oauth()
-else:
-    st.info("Upgrade to Pro to auto-post to X.")
 
 # === GENERATE ===
 if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
