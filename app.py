@@ -50,26 +50,28 @@ def is_pro_user(email):
 
 pro = is_pro_user(email)
 
-# === X OAUTH LOGIN (FULL FLOW) ===
+# === X OAUTH LOGIN (URL-BASED, NO SESSION LOSS) ===
 def handle_x_oauth():
-    # Step 3: Callback — Capture token and verifier from URL
-    if "oauth_token" in st.query_params and "oauth_verifier" in st.query_params:
-        oauth_token = st.query_params["oauth_token"]
+    # Step 3: Callback — Capture verifier from URL
+    if "oauth_verifier" in st.query_params:
         verifier = st.query_params["oauth_verifier"]
+        oauth_token = st.query_params.get("oauth_token", "")
         
-        if "request_token" in st.session_state:
+        if "request_token" in st.query_params:
+            request_token = st.query_params["request_token"]
+            request_token_secret = st.query_params["request_token_secret"]
+            
             auth = tweepy.OAuth1UserHandler(
                 st.secrets["X_CONSUMER_KEY"],
                 st.secrets["X_CONSUMER_SECRET"]
             )
-            auth.request_token = (oauth_token, st.session_state.request_token[1])  # Use URL token
+            auth.request_token = (request_token, request_token_secret)
             try:
                 access_token = auth.get_access_token(verifier)
                 st.session_state.x_access_token = access_token[0]
                 st.session_state.x_access_secret = access_token[1]
                 st.session_state.x_logged_in = True
                 
-                # Get username
                 client = tweepy.Client(
                     consumer_key=st.secrets["X_CONSUMER_KEY"],
                     consumer_secret=st.secrets["X_CONSUMER_SECRET"],
@@ -80,17 +82,12 @@ def handle_x_oauth():
                 st.session_state.x_username = user.data.username
                 st.success(f"Connected as @{st.session_state.x_username}!")
                 
-                # Clear query params to break loop
+                # Clean URL
                 st.query_params.clear()
-                
-                # Clear request token
-                if "request_token" in st.session_state:
-                    del st.session_state.request_token
             except Exception as e:
-                st.error(f"OAuth callback failed: {e}")
-                st.markdown("Try connecting again.")
+                st.error(f"OAuth failed: {e}")
         else:
-            st.error("Missing request token. Try connecting again.")
+            st.error("Missing request token. Try again.")
 
     # Step 1: Show login button
     elif not st.session_state.get("x_logged_in"):
@@ -102,13 +99,15 @@ def handle_x_oauth():
             )
             try:
                 auth_url = auth.get_authorization_url()
-                st.session_state.request_token = auth.request_token
-                st.markdown(f"[Login to X]({auth_url})")
+                # Save request token in URL
+                rt = auth.request_token
+                redirect_url = f"{auth_url}&request_token={rt[0]}&request_token_secret={rt[1]}"
+                st.markdown(f"[Login to X]({redirect_url})")
             except Exception as e:
                 st.error(f"Login setup failed: {e}")
 
-    # Step 4: Logged in state
-    else:
+    # Step 4: Logged in
+    elif st.session_state.get("x_logged_in"):
         st.success(f"Connected as @{st.session_state.x_username}")
         if st.button("Disconnect X"):
             for key in ["x_access_token", "x_access_secret", "x_username", "x_logged_in"]:
