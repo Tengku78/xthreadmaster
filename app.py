@@ -99,8 +99,8 @@ if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
             st.markdown(
                 f"""
                 <div style="
-                    background-color: #f8f9fa;
-                    padding: 16px;
+                    background-color: #1a1a1a;
+                    color: #ffffff;
                     border-radius: 12px;
                     border: 1px solid #e0e0e0;
                     font-family: 'Courier New', monospace;
