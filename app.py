@@ -3,29 +3,29 @@ import google.generativeai as genai
 import requests
 import tweepy
 from datetime import date
+import urllib.parse
 
 # === CONFIG ===
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
-# === SAFE MODEL SELECTION ===
+# === MODEL ===
 @st.cache_resource
 def get_model():
     try:
-        available = [m.name.split('/')[-1] for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-        st.info(f"Models: {available[:5]}...")
+        models = [m.name.split('/')[-1] for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+        st.info(f"Models: {models[:5]}...")
     except Exception as e:
         st.error(f"Model list failed: {e}")
         st.stop()
 
     for name in ['gemini-2.0-flash-exp', 'gemini-2.5-flash', 'gemini-2.5-pro']:
-        if any(name in m for m in available):
+        if any(name in m for m in models):
             try:
                 model = genai.GenerativeModel(name)
                 if model.generate_content("test").text:
                     st.success(f"Using {name}")
                     return model
-            except:
-                continue
+            except: pass
     st.error("No model works. Check API key.")
     st.stop()
 
@@ -36,13 +36,13 @@ st.title("XThreadMaster – Viral X Threads in 10s")
 st.markdown("**Generate, download, or auto-post.**")
 
 # === INPUTS ===
-email = st.text_input("Email (Pro unlock)", placeholder="your@email.com")
+email = st.text_input("Email (Pro)", placeholder="you@email.com")
 col1, col2 = st.columns(2)
 with col1: topic = st.text_input("Topic", placeholder="AI tips")
 with col2: tone = st.selectbox("Tone", ["Casual", "Funny", "Pro", "Degen"])
 length = st.slider("Length", 5, 15, 8)
 
-# === DAILY LIMIT ===
+# === LIMIT ===
 if "gen_count" not in st.session_state:
     st.session_state.gen_count = 0
     st.session_state.last_reset = date.today()
@@ -50,11 +50,11 @@ if st.session_state.last_reset != date.today():
     st.session_state.gen_count = 0
     st.session_state.last_reset = date.today()
 
-# === PRO CHECK ===
-def is_pro(email):
-    if not email: return False
+# === PRO ===
+def is_pro(e):
+    if not e: return False
     try:
-        custs = requests.get("https://api.stripe.com/v1/customers", params={"email": email}, auth=(st.secrets["STRIPE_SECRET_KEY"], "")).json().get("data", [])
+        custs = requests.get("https://api.stripe.com/v1/customers", params={"email": e}, auth=(st.secrets["STRIPE_SECRET_KEY"], "")).json().get("data", [])
         for c in custs:
             subs = requests.get(f"https://api.stripe.com/v1/subscriptions", params={"customer": c["id"], "status": "active"}, auth=(st.secrets["STRIPE_SECRET_KEY"], "")).json().get("data", [])
             if subs: return True
@@ -62,13 +62,13 @@ def is_pro(email):
     return False
 pro = is_pro(email)
 
-# === OAUTH: URL-BASED (NO SESSION LOSS) ===
+# === OAUTH: URL-BASED + URL ENCODING ===
 query = st.query_params
 
 if "oauth_verifier" in query:
     verifier = query["oauth_verifier"]
-    req_token = query.get("req_token")
-    req_secret = query.get("req_secret")
+    req_token = query.get("oauth_token")
+    req_secret = query.get("oauth_token_secret")
 
     if req_token and req_secret:
         auth = tweepy.OAuth1UserHandler(
@@ -96,7 +96,7 @@ if "oauth_verifier" in query:
         except Exception as e:
             st.error(f"OAuth failed: {e}")
     else:
-        st.error("Invalid tokens. Try again.")
+        st.error("Invalid or missing tokens. Try again.")
 
 elif not st.session_state.get("x_logged_in"):
     if st.button("Connect X Account (Pro)", use_container_width=True):
@@ -108,9 +108,12 @@ elif not st.session_state.get("x_logged_in"):
         try:
             auth_url = auth.get_authorization_url(signin_with_twitter=True)
             rt = auth.request_token
-            redirect_url = f"{auth_url}&req_token={rt['oauth_token']}&req_secret={rt['oauth_token_secret']}"
-            st.markdown(f"[**Authorize with X (opens new tab)**]({redirect_url})")
-            st.info("After approving, you'll return here automatically.")
+            # URL-encode tokens
+            encoded_token = urllib.parse.quote(rt['oauth_token'], safe='')
+            encoded_secret = urllib.parse.quote(rt['oauth_token_secret'], safe='')
+            redirect_url = f"{auth_url}&oauth_token={encoded_token}&oauth_token_secret={encoded_secret}"
+            st.markdown(f"[**Authorize with X (new tab)**]({redirect_url})")
+            st.info("Approve → return here. Fast!")
         except Exception as e:
             st.error(f"Setup failed: {e}")
 
@@ -185,7 +188,7 @@ if "thread" in st.session_state:
     st.success(status)
 
     if not pro:
-        with st.expander("Upgrade to Pro"): st.markdown("**[Buy Now](https://buy.stripe.com/...)**")
+        with st.expander("Upgrade"): st.markdown("**[Buy Now](https://buy.stripe.com/...)**")
 
 st.markdown("---")
-st.caption("**Grok + Streamlit** | First $100 MRR = beer on me.")
+st.caption("**Grok + Streamlit**")
