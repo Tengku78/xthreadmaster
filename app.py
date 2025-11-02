@@ -88,7 +88,8 @@ if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
             - Last: Strong CTA
             - Emojis EVERYWHERE
             - <100 chars/tweet
-            - Numbered 1/ 2/
+            - NO NUMBERING (no 1/, 2/, etc.)
+            - JUST THE TEXT, ONE TWEET PER LINE
             OUTPUT ONLY THE THREAD.
             """
             response = model.generate_content(prompt)
