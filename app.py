@@ -19,7 +19,7 @@ col1, col2 = st.columns(2)
 with col1:
     topic = st.text_input("Topic/Niche", placeholder="AI side hustles, fitness tips, etc.")
 with col2:
-    tone = st.selectbox("Tone", ["Casual", "Professional", "Funny", "Inspirational", "Degen")
+    tone = st.selectbox("Tone", ["Casual", "Professional", "Funny", "Inspirational", "Degen"])
 
 length = st.slider("Thread Length", 5, 15, 8, help="Number of tweets")
 
