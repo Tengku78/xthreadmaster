@@ -11,7 +11,7 @@ st.set_page_config(page_title="XThreadMaster", page_icon="rocket", layout="cente
 st.title("XThreadMaster – Viral X Threads in 10s")
 st.markdown("**Enter topic → Get full thread (hook, value, CTA) – Copy & Post!**")
 
-# === EMAIL INPUT (OUTSIDE BUTTON) ===
+# === EMAIL INPUT ===
 email = st.text_input("Enter your email (for Pro unlock)", placeholder="your@email.com")
 
 # === INPUTS ===
@@ -23,7 +23,7 @@ with col2:
 
 length = st.slider("Thread Length", 5, 15, 8, help="Number of tweets")
 
-# === STRIPE PRO CHECK ===
+# === PRO CHECK ===
 def is_pro_user(email):
     if not email:
         return False
@@ -55,7 +55,7 @@ elif email:
 # === GENERATE ===
 if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
     if topic.strip():
-        # === FREE TIER LIMIT (FILE-BASED) ===
+        # === FREE LIMIT ===
         if not pro:
             limit_file = ".generations"
             if os.path.exists(limit_file):
@@ -70,13 +70,12 @@ if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
                     st.markdown("**[Buy Now](https://buy.stripe.com/bJe5kEb5R8rm8Gc9pJ28800)**")
                 st.stop()
 
-            # Increment after generation
             generations += 1
             with open(limit_file, "w") as f:
                 f.write(str(generations))
             remaining = 3 - generations
 
-        # === GENERATE THREAD ===
+        # === GENERATE ===
         with st.spinner("Cooking viral thread..."):
             prompt = f"""
             Write a VIRAL X thread about: "{topic}"
@@ -87,14 +86,14 @@ if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
             - Last: Strong CTA
             - Emojis EVERYWHERE
             - <100 chars/tweet
-            - NO NUMBERING (no 1/, 2/, etc.)
-            - JUST THE TEXT, ONE TWEET PER LINE
+            - NO NUMBERING
+            - ONE TWEET PER LINE
             OUTPUT ONLY THE THREAD.
             """
             response = model.generate_content(prompt)
             thread = response.text.strip()
 
-        # === SINGLE, CLEAN THREAD BOX ===
+        # === CLEAN DARK BOX ===
         st.markdown(
             f"""
             <div style="
@@ -120,25 +119,30 @@ if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
 
         # === COPY BUTTON ===
         if st.button("📋 Copy Thread", key="copy_thread"):
-            st.code(thread, language=None)
-            st.success("Copied! Paste into X.")
+            st.markdown(
+                f"""
+                <textarea id="thread_text" style="position:absolute; left:-9999px">{thread}</textarea>
+                <script>
+                const text = document.getElementById('thread_text').value;
+                navigator.clipboard.writeText(text).then(() => {{
+                    parent.document.querySelector('.stAlert').innerText = 'Copied to clipboard!';
+                }});
+                </script>
+                """,
+                unsafe_allow_html=True
+            )
+            st.success("Copied to clipboard! Paste into X.")
 
-        # === STATUS MESSAGE ===
+        # === STATUS ===
         if not pro:
             st.success(f"Thread ready! ({remaining} free left today)")
         else:
             st.success("Pro Thread Ready – Unlimited!")
 
-        # === PRO FEATURES ===
-        if pro:
-            if st.button("Post to X (Pro Feature)"):
-                st.write("Auto-post coming in v2!")
-                st.balloons()
-
-        # === UPSELL (FREE USERS ONLY) ===
+        # === UPSELL ===
         if not pro:
-            with st.expander("Go PRO: Unlimited + Auto-Post ($12/mo)"):
-                st.markdown("**[Buy Now](https://buy.stripe.com/bJe5kEb5R8rm8Gc9pJ28800)**")
+            with st.expander("Go PRO: Unlimited ($12/mo)"):
+                st.markdown("**[Buy Now](https://buy.stripe.com/bJe5kEb5R8rm8 IuJ28800)**")
 
     else:
         st.warning("Enter a topic first!")
