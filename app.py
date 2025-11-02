@@ -50,22 +50,26 @@ def is_pro_user(email):
 
 pro = is_pro_user(email)
 
-# === X OAUTH LOGIN — ONLY FOR PRO ===
-if pro:
-    def handle_x_oauth():
-        # Step 3: Callback — Capture verifier
-        if "oauth_verifier" in st.query_params and "request_token" in st.session_state:
-            verifier = st.query_params["oauth_verifier"]
+# === X OAUTH LOGIN (FULL FLOW) ===
+def handle_x_oauth():
+    # Step 3: Callback — Capture token and verifier from URL
+    if "oauth_token" in st.query_params and "oauth_verifier" in st.query_params:
+        oauth_token = st.query_params["oauth_token"]
+        verifier = st.query_params["oauth_verifier"]
+        
+        if "request_token" in st.session_state:
             auth = tweepy.OAuth1UserHandler(
                 st.secrets["X_CONSUMER_KEY"],
                 st.secrets["X_CONSUMER_SECRET"]
             )
-            auth.request_token = st.session_state.request_token
+            auth.request_token = (oauth_token, st.session_state.request_token[1])  # Use URL token
             try:
                 access_token = auth.get_access_token(verifier)
                 st.session_state.x_access_token = access_token[0]
                 st.session_state.x_access_secret = access_token[1]
                 st.session_state.x_logged_in = True
+                
+                # Get username
                 client = tweepy.Client(
                     consumer_key=st.secrets["X_CONSUMER_KEY"],
                     consumer_secret=st.secrets["X_CONSUMER_SECRET"],
@@ -74,31 +78,46 @@ if pro:
                 )
                 user = client.get_me()
                 st.session_state.x_username = user.data.username
-                st.success(f"Connected as @{st.session_state.x_username}")
+                st.success(f"Connected as @{st.session_state.x_username}!")
+                
+                # Clear query params to break loop
                 st.query_params.clear()
+                
+                # Clear request token
+                if "request_token" in st.session_state:
+                    del st.session_state.request_token
             except Exception as e:
-                st.error(f"OAuth failed: {e}")
+                st.error(f"OAuth callback failed: {e}")
+                st.markdown("Try connecting again.")
+        else:
+            st.error("Missing request token. Try connecting again.")
 
-        # Step 1: Show login button
-        elif not st.session_state.get("x_logged_in"):
-            if st.button("Connect Your X Account (Pro Feature)"):
-                auth = tweepy.OAuth1UserHandler(
-                    st.secrets["X_CONSUMER_KEY"],
-                    st.secrets["X_CONSUMER_SECRET"],
-                    callback="https://xthreadmaster.streamlit.app"
-                )
+    # Step 1: Show login button
+    elif not st.session_state.get("x_logged_in"):
+        if st.button("Connect Your X Account (Pro Feature)"):
+            auth = tweepy.OAuth1UserHandler(
+                st.secrets["X_CONSUMER_KEY"],
+                st.secrets["X_CONSUMER_SECRET"],
+                callback="https://xthreadmaster.streamlit.app"
+            )
+            try:
                 auth_url = auth.get_authorization_url()
                 st.session_state.request_token = auth.request_token
                 st.markdown(f"[Login to X]({auth_url})")
-        else:
-            st.success(f"Connected as @{st.session_state.x_username}")
-            if st.button("Disconnect X"):
-                for key in ["x_access_token", "x_access_secret", "x_username", "x_logged_in"]:
-                    if key in st.session_state:
-                        del st.session_state[key]
-                st.success("Disconnected from X")
+            except Exception as e:
+                st.error(f"Login setup failed: {e}")
 
-    handle_x_oauth()
+    # Step 4: Logged in state
+    elif st.session_state.get("x_logged_in"):
+        st.success(f"Connected as @{st.session_state.x_username}")
+        if st.button("Disconnect X"):
+            for key in ["x_access_token", "x_access_secret", "x_username", "x_logged_in"]:
+                if key in st.session_state:
+                    del st.session_state[key]
+            st.success("Disconnected from X")
+
+# Run OAuth
+handle_x_oauth()
 else:
     st.info("Upgrade to Pro to auto-post to X.")
 
