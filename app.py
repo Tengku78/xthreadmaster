@@ -101,15 +101,17 @@ if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
                 <div style="
                     background-color: #1a1a1a;
                     color: #ffffff;
-                    border-radius: 12px;
-                    border: 1px solid #e0e0e0;
+                    padding: 20px;
+                    border-radius: 16px;
+                    border: 1px solid #333;
                     font-family: 'Courier New', monospace;
-                    font-size: 15px;
-                    line-height: 1.6;
-                    max-height: 500px;
+                    font-size: 16px;
+                    line-height: 1.7;
+                    max-height: 600px;
                     overflow-y: auto;
                     white-space: pre-wrap;
                     word-wrap: break-word;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
                 ">
                 {thread}
                 </div>
