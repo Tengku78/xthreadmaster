@@ -50,9 +50,38 @@ def is_pro_user(email):
 
 pro = is_pro_user(email)
 
-# === X LOGIN (ONLY FOR PRO) ===
-if pro:
-    if not st.session_state.get("x_logged_in"):
+# === X OAUTH LOGIN (FULL FLOW) ===
+def handle_x_oauth():
+    # Step 3: Callback — Capture verifier
+    if "oauth_verifier" in st.query_params and "request_token" in st.session_state:
+        verifier = st.query_params["oauth_verifier"]
+        auth = tweepy.OAuth1UserHandler(
+            st.secrets["X_CONSUMER_KEY"],
+            st.secrets["X_CONSUMER_SECRET"]
+        )
+        auth.request_token = st.session_state.request_token
+        try:
+            access_token = auth.get_access_token(verifier)
+            st.session_state.x_access_token = access_token[0]
+            st.session_state.x_access_secret = access_token[1]
+            st.session_state.x_logged_in = True
+            # Get username
+            client = tweepy.Client(
+                consumer_key=st.secrets["X_CONSUMER_KEY"],
+                consumer_secret=st.secrets["X_CONSUMER_SECRET"],
+                access_token=st.session_state.x_access_token,
+                access_token_secret=st.session_state.x_access_secret
+            )
+            user = client.get_me()
+            st.session_state.x_username = user.data.username
+            st.success(f"Connected as @{st.session_state.x_username}")
+            # Clean URL
+            st.query_params.clear()
+        except Exception as e:
+            st.error(f"OAuth failed: {e}")
+
+    # Step 1: Show login button
+    elif not st.session_state.get("x_logged_in"):
         if st.button("Connect Your X Account (Pro Feature)"):
             auth = tweepy.OAuth1UserHandler(
                 st.secrets["X_CONSUMER_KEY"],
@@ -63,7 +92,15 @@ if pro:
             st.session_state.request_token = auth.request_token
             st.markdown(f"[Login to X]({auth_url})")
     else:
-        st.success(f"Connected to X as @{st.session_state.get('x_username', 'User')}")
+        st.success(f"Connected as @{st.session_state.x_username}")
+        if st.button("Disconnect X"):
+            for key in ["x_access_token", "x_access_secret", "x_username", "x_logged_in"]:
+                if key in st.session_state:
+                    del st.session_state[key]
+            st.success("Disconnected from X")
+
+# Run OAuth
+handle_x_oauth()
 
 # === GENERATE ===
 if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
