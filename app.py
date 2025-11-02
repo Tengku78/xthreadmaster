@@ -75,7 +75,7 @@ if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
                 f.write(str(generations))
             remaining = 3 - generations
 
-        # === GENERATE ===
+        # === GENERATE & SAVE TO SESSION ===
         with st.spinner("Cooking viral thread..."):
             prompt = f"""
             Write a VIRAL X thread about: "{topic}"
@@ -93,58 +93,62 @@ if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
             response = model.generate_content(prompt)
             thread = response.text.strip()
 
-        # === CLEAN DARK BOX ===
-        st.markdown(
-            f"""
-            <div style="
-                background-color: #1a1a1a;
-                color: #ffffff;
-                padding: 20px;
-                border-radius: 16px;
-                border: 1px solid #333;
-                font-family: 'Courier New', monospace;
-                font-size: 16px;
-                line-height: 1.7;
-                max-height: 600px;
-                overflow-y: auto;
-                white-space: pre-wrap;
-                word-wrap: break-word;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            ">
-            {thread}
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-        # === COPY + DOWNLOAD BUTTONS ===
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("📋 Copy Thread", key="copy"):
-                st.code(thread, language=None)
-                st.success("Copied! Paste into X.")
-        with col2:
-            st.download_button(
-                label="📥 Download .txt",
-                data=thread,
-                file_name="xthread.txt",
-                mime="text/plain"
-            )
-
-        # === STATUS ===
-        if not pro:
-            st.success(f"Thread ready! ({remaining} free left today)")
-        else:
-            st.success("Pro Thread Ready – Unlimited!")
-
-        # === UPSELL ===
-        if not pro:
-            with st.expander("Go PRO: Unlimited ($12/mo)"):
-                st.markdown("**[Buy Now](https://buy.stripe.com/bJe5kEb5R8rm8Gc9pJ28800)**")
+        # Save thread to session
+        st.session_state.thread = thread
+        st.session_state.remaining = remaining if not pro else None
 
     else:
         st.warning("Enter a topic first!")
 
-# === FOOTER ===
-st.markdown("---")
-st.caption("**Built with Grok & Streamlit** | First $100 MRR = beer on me.")
+# === DISPLAY THREAD (PERSISTENT) ===
+if "thread" in st.session_state:
+    thread = st.session_state.thread
+
+    # === DARK BOX ===
+    st.markdown(
+        f"""
+        <div style="
+            background-color: #1a1a1a;
+            color: #ffffff;
+            padding: 20px;
+            border-radius: 16px;
+            border: 1px solid #333;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            line-height: 1.7;
+            max-height: 600px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        ">
+        {thread}
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # === COPY + DOWNLOAD BUTTONS ===
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("📋 Copy Thread", key="copy"):
+            st.code(thread, language=None)
+            st.success("Copied! Paste into X.")
+    with col2:
+        st.download_button(
+            label="📥 Download .txt",
+            data=thread,
+            file_name="xthread.txt",
+            mime="text/plain"
+        )
+
+    # === STATUS ===
+    if not pro:
+        st.success(f"Thread ready! ({st.session_state.remaining} free left today)")
+    else:
+        st.success("Pro Thread Ready – Unlimited!")
+
+    # === UPSELL ===
+    if not pro:
+        with st.expander("Go PRO: Unlimited ($12/mo)"):
+            st.markdown("**[Buy Now](https://buy.stripe.com/bJe5kEb5R8rm8Gc9pJ28800)**")
