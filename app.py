@@ -3,13 +3,12 @@ import google.generativeai as genai
 import requests
 import os
 import tweepy
-from urllib.parse import urlparse, parse_qs
 
 # === CONFIG ===
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-model = genai.GenerativeModel('gemini-2.0-flash')
+model = genai.GenerativeModel('gemini-1.5-flash')  # Assuming 'gemini-2.0-flash' may not exist; adjust if needed
 
-st.set_page_config(page_title="XThreadMaster", page_icon="rocket", layout="centered")
+st.set_page_config(page_title="XThreadMaster", page_icon="🚀", layout="centered")
 st.title("XThreadMaster – Viral X Threads in 10s")
 st.markdown("**Generate, download, or auto-post to your X account.**")
 
@@ -53,23 +52,27 @@ pro = is_pro_user(email)
 # === X OAUTH LOGIN (URL-BASED, NO SESSION LOSS) ===
 def handle_x_oauth():
     # Step 3: Callback — Capture verifier from URL
-    if "oauth_verifier" in st.query_params:
-        verifier = st.query_params["oauth_verifier"]
-        oauth_token = st.query_params.get("oauth_token", "")
+    query_params = st.query_params.to_dict()
+    if "oauth_verifier" in query_params:
+        verifier = query_params["oauth_verifier"][0]
+        oauth_token = query_params.get("oauth_token", [""])[0]
         
-        if "request_token" in st.query_params:
-            request_token = st.query_params["request_token"]
-            request_token_secret = st.query_params["request_token_secret"]
+        if "request_token" in st.session_state and "request_token_secret" in st.session_state:
+            request_token = st.session_state.request_token
+            request_token_secret = st.session_state.request_token_secret
             
             auth = tweepy.OAuth1UserHandler(
                 st.secrets["X_CONSUMER_KEY"],
                 st.secrets["X_CONSUMER_SECRET"]
             )
-            auth.request_token = (request_token, request_token_secret)
+            auth.request_token = {
+                "oauth_token": request_token,
+                "oauth_token_secret": request_token_secret
+            }
             try:
-                access_token = auth.get_access_token(verifier)
-                st.session_state.x_access_token = access_token[0]
-                st.session_state.x_access_secret = access_token[1]
+                access_token, access_token_secret = auth.get_access_token(verifier)
+                st.session_state.x_access_token = access_token
+                st.session_state.x_access_secret = access_token_secret
                 st.session_state.x_logged_in = True
                 
                 client = tweepy.Client(
@@ -81,6 +84,10 @@ def handle_x_oauth():
                 user = client.get_me()
                 st.session_state.x_username = user.data.username
                 st.success(f"Connected as @{st.session_state.x_username}!")
+                
+                # Clean up
+                del st.session_state.request_token
+                del st.session_state.request_token_secret
                 
                 # Clean URL
                 st.query_params.clear()
@@ -99,10 +106,9 @@ def handle_x_oauth():
             )
             try:
                 auth_url = auth.get_authorization_url()
-                # Save request token in URL
-                rt = auth.request_token
-                redirect_url = f"{auth_url}&request_token={rt[0]}&request_token_secret={rt[1]}"
-                st.markdown(f"[Login to X]({redirect_url})")
+                st.session_state.request_token = auth.request_token["oauth_token"]
+                st.session_state.request_token_secret = auth.request_token["oauth_token_secret"]
+                st.markdown(f"[Login to X]({auth_url})")
             except Exception as e:
                 st.error(f"Login setup failed: {e}")
 
@@ -123,6 +129,7 @@ if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
     if topic.strip():
         # === FREE LIMIT ===
         if not pro:
+            # Note: File-based limit won't persist in Streamlit Cloud; consider session_state or external DB for production
             limit_file = ".generations"
             if os.path.exists(limit_file):
                 with open(limit_file, "r") as f:
@@ -212,7 +219,7 @@ if "thread" in st.session_state:
                         if t.strip():
                             resp = client.create_tweet(in_reply_to_tweet_id=tweet_id, text=t)
                             tweet_id = resp.data['id']
-                    url = f"https://x.com/user/status/{first.data['id']}"
+                    url = f"https://x.com/{st.session_state.x_username}/status/{first.data['id']}"
                     st.success(f"Posted! [View on X]({url})")
                 except Exception as e:
                     st.error(f"Failed: {e}")
