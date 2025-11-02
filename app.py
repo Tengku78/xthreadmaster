@@ -3,7 +3,7 @@ import google.generativeai as genai
 import requests
 import os
 import tweepy
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import urlparse, parse_qs
 
 # === CONFIG ===
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
@@ -11,7 +11,7 @@ model = genai.GenerativeModel('gemini-2.0-flash')
 
 st.set_page_config(page_title="XThreadMaster", page_icon="rocket", layout="centered")
 st.title("XThreadMaster – Viral X Threads in 10s")
-st.markdown("**Enter topic → Get full thread (hook, value, CTA) – Copy & Post!**")
+st.markdown("**Generate, download, or auto-post to your X account.**")
 
 # === EMAIL INPUT ===
 email = st.text_input("Enter your email (for Pro unlock)", placeholder="your@email.com")
@@ -49,15 +49,11 @@ def is_pro_user(email):
         return False
 
 pro = is_pro_user(email)
-if pro:
-    st.success(f"Pro unlocked for {email}! Unlimited access.")
-elif email:
-    st.warning("No active Pro subscription. Using free tier.")
 
-# === X OAUTH LOGIN ===
-def get_x_auth():
-    if "oauth_token" not in st.query_params and "x_logged_in" not in st.session_state:
-        if st.button("Connect Your X Account"):
+# === X LOGIN (ONLY FOR PRO) ===
+if pro:
+    if not st.session_state.get("x_logged_in"):
+        if st.button("Connect Your X Account (Pro Feature)"):
             auth = tweepy.OAuth1UserHandler(
                 st.secrets["X_CONSUMER_KEY"],
                 st.secrets["X_CONSUMER_SECRET"],
@@ -66,23 +62,8 @@ def get_x_auth():
             auth_url = auth.get_authorization_url()
             st.session_state.request_token = auth.request_token
             st.markdown(f"[Login to X]({auth_url})")
-    
-    # Callback
-    if "oauth_token" in st.query_params:
-        verifier = st.query_params["oauth_verifier"]
-        auth = tweepy.OAuth1UserHandler(
-            st.secrets["X_CONSUMER_KEY"],
-            st.secrets["X_CONSUMER_SECRET"]
-        )
-        auth.request_token = st.session_state.request_token
-        access_token = auth.get_access_token(verifier)
-        st.session_state.x_access_token = access_token[0]
-        st.session_state.x_access_secret = access_token[1]
-        st.session_state.x_logged_in = True
-        st.success("X Connected!")
-
-# Run login
-get_x_auth()
+    else:
+        st.success(f"Connected to X as @{st.session_state.get('x_username', 'User')}")
 
 # === GENERATE ===
 if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
@@ -97,8 +78,8 @@ if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
                 generations = 0
 
             if generations >= 3:
-                st.error("Free limit reached (3/day)! Upgrade to Pro.")
-                with st.expander("Go PRO: Unlimited ($12/mo)"):
+                st.error("Free limit: 3/day. Upgrade to Pro for unlimited.")
+                with st.expander("Upgrade to Pro ($12/mo)"):
                     st.markdown("**[Buy Now](https://buy.stripe.com/bJe5kEb5R8rm8Gc9pJ28800)**")
                 st.stop()
 
@@ -108,7 +89,7 @@ if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
             remaining = 3 - generations
 
         # === GENERATE ===
-        with st.spinner("Cooking viral thread..."):
+        with st.spinner("Generating thread..."):
             prompt = f"""
             Write a VIRAL X thread about: "{topic}"
             - {length} tweets
@@ -131,13 +112,27 @@ if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
     else:
         st.warning("Enter a topic first!")
 
-# === DISPLAY THREAD + POST ===
+# === DISPLAY THREAD ===
 if "thread" in st.session_state:
     thread = st.session_state.thread
 
     st.markdown(
         f"""
-        <div style="background-color: #1a1a1a; color: #ffffff; padding: 20px; border-radius: 16px; border: 1px solid #333; font-family: 'Courier New', monospace; font-size: 16px; line-height: 1.7; max-height: 600px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+        <div style="
+            background-color: #1a1a1a;
+            color: #ffffff;
+            padding: 20px;
+            border-radius: 16px;
+            border: 1px solid #333;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            line-height: 1.7;
+            max-height: 600px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        ">
         {thread}
         </div>
         """,
@@ -146,8 +141,9 @@ if "thread" in st.session_state:
 
     st.download_button("📥 Download .txt", thread, "xthread.txt", "text/plain")
 
+    # === AUTO-POST (ONLY PRO + LOGGED IN) ===
     if pro and st.session_state.get("x_logged_in"):
-        if st.button("Auto-Post to X", key="post_x"):
+        if st.button("Auto-Post to Your X Account", key="post_x"):
             with st.spinner("Posting..."):
                 try:
                     client = tweepy.Client(
@@ -164,18 +160,21 @@ if "thread" in st.session_state:
                             resp = client.create_tweet(in_reply_to_tweet_id=tweet_id, text=t)
                             tweet_id = resp.data['id']
                     url = f"https://x.com/user/status/{first.data['id']}"
-                    st.success(f"Posted! [View]({url})")
+                    st.success(f"Posted! [View on X]({url})")
                 except Exception as e:
                     st.error(f"Failed: {e}")
 
+    # === STATUS ===
     if not pro:
         st.success(f"Thread ready! ({st.session_state.remaining} free left today)")
     else:
         st.success("Pro Thread Ready – Unlimited!")
 
+    # === UPSELL ===
     if not pro:
-        with st.expander("Go PRO: Unlimited ($12/mo)"):
+        with st.expander("Upgrade to Pro ($12/mo)"):
             st.markdown("**[Buy Now](https://buy.stripe.com/bJe5kEb5R8rm8Gc9pJ28800)**")
 
+# === FOOTER ===
 st.markdown("---")
 st.caption("**Built with Grok & Streamlit** | First $100 MRR = beer on me.")
