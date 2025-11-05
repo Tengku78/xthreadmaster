@@ -189,16 +189,19 @@ if "oauth_verifier" in query and "oauth_token" in query:
             access = auth.get_access_token(verifier)
             st.session_state.x_access_token = access[0]
             st.session_state.x_access_secret = access[1]
-            st.session_state.x_logged_in = True
 
+            # Get user info with OAuth 1.0a User Context
             client = tweepy.Client(
                 consumer_key=st.secrets["X_CONSUMER_KEY"],
                 consumer_secret=st.secrets["X_CONSUMER_SECRET"],
                 access_token=access[0],
                 access_token_secret=access[1]
             )
-            user = client.get_me(user_auth=False).data
+
+            # Use user_auth=True for OAuth 1.0a User Context
+            user = client.get_me(user_auth=True).data
             st.session_state.x_username = user.username
+            st.session_state.x_logged_in = True
 
             # Clean up temporary storage
             cleanup_oauth_secret(oauth_token)
@@ -240,7 +243,8 @@ if not st.session_state.get("x_logged_in"):
 # LOGGED IN
 else:
     col1, col2 = st.columns(2)
-    with col1: st.success(f"@{st.session_state.x_username}")
+    username = st.session_state.get("x_username", "Unknown")
+    with col1: st.success(f"✅ Connected as @{username}")
     with col2:
         if st.button("Disconnect", use_container_width=True):
             for k in ["x_access_token", "x_access_secret", "x_username", "x_logged_in"]:
