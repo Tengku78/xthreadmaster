@@ -6,11 +6,6 @@ import json
 from datetime import date, datetime
 import os
 import tempfile
-import zipfile
-import io
-import re
-from PIL import Image
-import base64
 
 # === CONFIG ===
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
@@ -113,9 +108,9 @@ with st.sidebar:
 
     ### 🎨 Visual Pack ($17/mo)
     - ✅ Everything in Pro
-    - 📸 Instagram carousel generation
-    - 🖼️ AI-generated images (Gemini)
-    - 💾 Download as ZIP
+    - 📸 Instagram carousel captions
+    - 🎨 Design guidance & templates
+    - 📥 Download captions as .txt
 
     ---
 
@@ -474,58 +469,12 @@ Requirements:
                     st.error(f"❌ AI generation failed: {error_msg}")
                 st.stop()
 
-        # Generate images for each slide
-        with st.spinner("🖼️ Generating AI images for your carousel..."):
-            carousel_images = []
-
-            # Parse carousel to extract slide titles for image generation
-            slides = []
-            for line in carousel.split('\n'):
-                if line.strip().startswith('SLIDE'):
-                    # Extract title from "SLIDE X: Title"
-                    if ':' in line:
-                        title = line.split(':', 1)[1].strip()
-                        slides.append(title)
-
-            # Generate images using Gemini 2.0 Imagen
-            image_model = genai.GenerativeModel('gemini-2.0-flash-exp')
-
-            for i, slide_title in enumerate(slides, 1):
-                try:
-                    # Create image prompt based on slide content and topic
-                    img_prompt = f"""Create a professional, eye-catching Instagram carousel image for:
-Topic: {topic}
-Slide: {slide_title}
-
-Style: Modern, clean, vibrant, social media optimized
-Requirements: No text overlay, visually striking, relevant to the topic"""
-
-                    # Generate image
-                    response = image_model.generate_content(img_prompt)
-
-                    # Extract image data
-                    if hasattr(response, 'parts') and response.parts:
-                        for part in response.parts:
-                            if hasattr(part, 'inline_data'):
-                                img_bytes = part.inline_data.data
-                                carousel_images.append({
-                                    'data': img_bytes,
-                                    'slide_num': i,
-                                    'title': slide_title
-                                })
-                                break
-
-                except Exception as e:
-                    st.warning(f"⚠️ Could not generate image for slide {i}: {str(e)}")
-                    # Continue with other slides even if one fails
-                    continue
-
-            if not carousel_images:
-                st.error("❌ Failed to generate any images. Please try again.")
-                st.stop()
+        # NOTE: Image generation temporarily disabled
+        # Gemini 2.0 doesn't support direct image generation yet
+        # Future: Integrate with DALL-E, Midjourney, or Stability AI
 
         st.session_state.carousel = carousel
-        st.session_state.carousel_images = carousel_images
+        st.session_state.carousel_images = []  # Empty for now
         st.session_state.platform = "Instagram Carousel"
 
     # Save to history (Pro users only, keep last 10)
@@ -654,64 +603,48 @@ if "carousel" in st.session_state and st.session_state.carousel and st.session_s
     st.markdown("### 📝 Carousel Captions")
     st.code(st.session_state.carousel, language="text")
 
-    # Display generated images
-    if st.session_state.carousel_images:
-        st.markdown("### 🖼️ AI-Generated Images")
+    # Action buttons
+    col1, col2 = st.columns(2)
 
-        # Display images in a grid
-        for img_data in st.session_state.carousel_images:
-            st.markdown(f"**Slide {img_data['slide_num']}: {img_data['title']}**")
+    with col1:
+        # Download captions as text
+        st.download_button(
+            "📥 Download Captions",
+            st.session_state.carousel,
+            "carousel_captions.txt",
+            mime="text/plain",
+            use_container_width=True,
+            help="Download carousel captions as .txt file"
+        )
 
-            # Convert bytes to image and display
-            img = Image.open(io.BytesIO(img_data['data']))
-            st.image(img, use_container_width=True)
-            st.markdown("---")
+    with col2:
+        st.info("🎨 Use [Canva](https://canva.com) or [Adobe Express](https://express.adobe.com) to create images")
 
-        # Action buttons
-        col1, col2 = st.columns(2)
+    # Image generation info
+    st.markdown("---")
+    st.markdown("### 🖼️ Creating Images for Your Carousel")
 
-        with col1:
-            # Download captions as text
-            st.download_button(
-                "📥 Download Captions",
-                st.session_state.carousel,
-                "carousel_captions.txt",
-                mime="text/plain",
-                use_container_width=True,
-                help="Download carousel captions as .txt file"
-            )
+    st.info("""
+    **How to create stunning carousel images:**
 
-        with col2:
-            # Download as ZIP with images and captions
-            if st.button("📦 Download ZIP (Images + Captions)", use_container_width=True, type="primary"):
-                with st.spinner("📦 Preparing your carousel package..."):
-                    # Create ZIP file in memory
-                    zip_buffer = io.BytesIO()
+    1. **Use Design Tools:**
+       - [Canva](https://canva.com) - Free templates for Instagram carousels
+       - [Adobe Express](https://express.adobe.com) - Professional designs
+       - [Figma](https://figma.com) - Custom designs
 
-                    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                        # Add captions file
-                        zip_file.writestr("captions.txt", st.session_state.carousel)
+    2. **Use AI Image Generators:**
+       - [Midjourney](https://midjourney.com) - High-quality AI images ($10/mo)
+       - [DALL-E](https://openai.com/dall-e) - OpenAI's image generator
+       - [Leonardo.ai](https://leonardo.ai) - Free tier available
 
-                        # Add images
-                        for img_data in st.session_state.carousel_images:
-                            img_filename = f"slide_{img_data['slide_num']:02d}.jpg"
-                            zip_file.writestr(img_filename, img_data['data'])
+    3. **Instagram Carousel Requirements:**
+       - Format: JPEG or PNG
+       - Minimum size: 1080px width
+       - Aspect ratio: 1:1 (square) or 4:5 (portrait)
+       - Maximum: 10 images per carousel
 
-                    zip_buffer.seek(0)
-
-                    st.download_button(
-                        "✅ Click to Download ZIP",
-                        zip_buffer,
-                        "instagram_carousel.zip",
-                        mime="application/zip",
-                        use_container_width=True
-                    )
-                    st.success("✅ Carousel package ready!")
-
-        st.info("💡 **Next Steps:** Upload these images to Instagram in order, then copy-paste the captions!")
-
-    else:
-        st.warning("⚠️ No images were generated. Please try again.")
+    💡 **Pro Tip:** Copy each slide's caption and paste it as a prompt into your chosen AI image generator!
+    """)
 
 st.markdown("---")
 st.caption(f"Made with ❤️ using Gemini AI • [Upgrade to Pro]({STRIPE_PAYMENT_LINK})")
