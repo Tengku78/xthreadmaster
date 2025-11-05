@@ -235,9 +235,9 @@ if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
     st.rerun()
 
 # === DISPLAY ===
-if "thread" in st.session_state:
+if "thread" in st.session_state and st.session_state.thread:
     st.code(st.session_state.thread, language="text")
-    st.download_button("Download .txt", st.session_state.thread, "thread.txt")
+    st.download_button("📥 Download .txt", st.session_state.thread, "thread.txt", mime="text/plain")
 
     if pro and st.session_state.get("x_logged_in"):
         if st.button("🚀 Auto-Post to X", use_container_width=True, type="primary"):
