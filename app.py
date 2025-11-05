@@ -316,7 +316,7 @@ if pro:
 
         # Helpful note if email not entered
         if not email or not email.strip():
-            st.info("💡 **Tip:** Enter your Pro email in Account Settings above to enable auto-posting!")
+            st.info("😊 **You're connected!** Just re-enter your Pro email in Account Settings above to start posting!")
 
 # === GENERATE ===
 st.markdown("---")
