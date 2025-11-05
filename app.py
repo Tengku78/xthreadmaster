@@ -2,12 +2,61 @@ import streamlit as st
 import google.generativeai as genai
 import requests
 import tweepy
-import urllib.parse
 import json
-from datetime import date
+from datetime import date, datetime
+import os
+import tempfile
 
 # === CONFIG ===
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+
+# === OAUTH TOKEN STORAGE ===
+# Helper functions to store/retrieve OAuth tokens temporarily
+def save_oauth_secret(oauth_token, oauth_secret):
+    """Save OAuth secret to a temporary file keyed by oauth_token"""
+    temp_dir = tempfile.gettempdir()
+    filepath = os.path.join(temp_dir, f"xthread_oauth_{oauth_token}.json")
+    data = {
+        "secret": oauth_secret,
+        "timestamp": datetime.now().isoformat()
+    }
+    with open(filepath, 'w') as f:
+        json.dump(data, f)
+    return filepath
+
+def get_oauth_secret(oauth_token):
+    """Retrieve OAuth secret from temporary file"""
+    temp_dir = tempfile.gettempdir()
+    filepath = os.path.join(temp_dir, f"xthread_oauth_{oauth_token}.json")
+
+    if not os.path.exists(filepath):
+        return None
+
+    try:
+        with open(filepath, 'r') as f:
+            data = json.load(f)
+
+        # Check if token is less than 10 minutes old
+        timestamp = datetime.fromisoformat(data['timestamp'])
+        age = (datetime.now() - timestamp).total_seconds()
+
+        if age > 600:  # 10 minutes
+            os.remove(filepath)
+            return None
+
+        return data['secret']
+    except Exception:
+        return None
+
+def cleanup_oauth_secret(oauth_token):
+    """Remove OAuth secret file after use"""
+    temp_dir = tempfile.gettempdir()
+    filepath = os.path.join(temp_dir, f"xthread_oauth_{oauth_token}.json")
+    try:
+        if os.path.exists(filepath):
+            os.remove(filepath)
+    except:
+        pass
 
 # === MODEL ===
 @st.cache_resource
@@ -112,28 +161,18 @@ if "oauth_verifier" in query and "oauth_token" in query:
         verifier = query["oauth_verifier"]
         oauth_token = query["oauth_token"]
 
-        # CRITICAL: Get state parameter which contains the token secret
-        req_secret = None
-        if "state" in query:
-            try:
-                state_data = json.loads(urllib.parse.unquote(query["state"]))
-                req_secret = state_data.get("secret")
-                st.info(f"🔍 Debug: Retrieved secret from state parameter")
-            except Exception as e:
-                st.error(f"❌ Failed to parse state: {e}")
-
-        # Fallback: try session state (usually won't work after redirect)
-        if not req_secret and "oauth_token_secret" in st.session_state:
-            req_secret = st.session_state.oauth_token_secret
-            st.info(f"🔍 Debug: Retrieved secret from session state")
+        # Retrieve token secret from file storage
+        req_secret = get_oauth_secret(oauth_token)
 
         if not req_secret:
-            st.error("❌ OAuth session lost. The state parameter was not preserved during redirect.")
-            st.warning("📝 Debug info: This happens when X redirects back without the state parameter.")
-            st.info("💡 Try clicking the 'Connect X Account' button again and make sure you complete the authorization on X.")
-
-            # Show what we received
-            st.code(f"Received params: {dict(query)}")
+            st.error("❌ OAuth session expired or not found.")
+            st.warning("📝 The OAuth token was not found. This can happen if:")
+            st.markdown("""
+            - More than 10 minutes passed since you clicked 'Connect'
+            - The temporary storage was cleared
+            - You're on a multi-instance deployment
+            """)
+            st.info("💡 **Solution:** Click 'Connect X Account' again and complete the authorization within 10 minutes.")
 
             st.query_params.clear()
             st.session_state.processing_oauth = False
@@ -161,8 +200,8 @@ if "oauth_verifier" in query and "oauth_token" in query:
             user = client.get_me(user_auth=False).data
             st.session_state.x_username = user.username
 
-            # Clean up temporary state
-            st.session_state.pop("oauth_token_secret", None)
+            # Clean up temporary storage
+            cleanup_oauth_secret(oauth_token)
             st.session_state.pop("processing_oauth", None)
 
             # Clear query params and rerun
@@ -171,7 +210,7 @@ if "oauth_verifier" in query and "oauth_token" in query:
             st.rerun()
         except Exception as e:
             st.error(f"❌ OAuth failed: {e}")
-            st.code(f"Error details: {str(e)}")
+            cleanup_oauth_secret(oauth_token)
             st.session_state.processing_oauth = False
             st.query_params.clear()
 
@@ -189,19 +228,12 @@ if not st.session_state.get("x_logged_in"):
             auth_url = auth.get_authorization_url(signin_with_twitter=True)
             rt = auth.request_token
 
-            # Store token secret in session state as backup
-            st.session_state.oauth_token_secret = rt["oauth_token_secret"]
+            # Store token secret in temporary file storage (survives redirect)
+            save_oauth_secret(rt["oauth_token"], rt["oauth_token_secret"])
 
-            # Also encode in state parameter for double redundancy
-            state = urllib.parse.quote(json.dumps({
-                "token": rt["oauth_token"],
-                "secret": rt["oauth_token_secret"]
-            }))
-            final_url = f"{auth_url}&state={state}"
-
-            st.markdown(f"### [👉 Click here to authorize with X]({final_url})")
+            st.markdown(f"### [👉 Click here to authorize with X]({auth_url})")
             st.warning("⚠️ You will be redirected to X. After authorizing, you'll return here automatically.")
-            st.info("💡 **Important:** Make sure cookies are enabled in your browser for this to work!")
+            st.info("💡 **Important:** Complete the authorization within 10 minutes.")
         except Exception as e:
             st.error(f"❌ Setup failed: {e}")
 
