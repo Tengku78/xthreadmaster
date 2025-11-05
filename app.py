@@ -190,17 +190,10 @@ if "oauth_verifier" in query and "oauth_token" in query:
             st.session_state.x_access_token = access[0]
             st.session_state.x_access_secret = access[1]
 
-            # Get user info with OAuth 1.0a User Context
-            client = tweepy.Client(
-                consumer_key=st.secrets["X_CONSUMER_KEY"],
-                consumer_secret=st.secrets["X_CONSUMER_SECRET"],
-                access_token=access[0],
-                access_token_secret=access[1]
-            )
-
-            # Use user_auth=True for OAuth 1.0a User Context
-            user = client.get_me(user_auth=True).data
-            st.session_state.x_username = user.username
+            # Get user info using v1.1 API which supports OAuth 1.0a
+            api = tweepy.API(auth)
+            user = api.verify_credentials()
+            st.session_state.x_username = user.screen_name
             st.session_state.x_logged_in = True
 
             # Clean up temporary storage
@@ -209,7 +202,7 @@ if "oauth_verifier" in query and "oauth_token" in query:
 
             # Clear query params and rerun
             st.query_params.clear()
-            st.success(f"✅ Connected as @{user.username}")
+            st.success(f"✅ Connected as @{user.screen_name}")
             st.rerun()
         except Exception as e:
             st.error(f"❌ OAuth failed: {e}")
