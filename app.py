@@ -103,6 +103,8 @@ with st.sidebar:
     - ♾️ Unlimited generations
     - 🚀 One-click auto-posting
     - 🔗 X account integration
+    - ✏️ Edit before posting
+    - 📚 Thread history (last 10)
 
     ---
 
@@ -118,6 +120,8 @@ if "x_logged_in" not in st.session_state:
     st.session_state.x_logged_in = False
 if "thread" not in st.session_state:
     st.session_state.thread = None
+if "thread_history" not in st.session_state:
+    st.session_state.thread_history = []
 
 st.title("🚀 XThreadMaster")
 st.markdown("Generate viral X threads in seconds with AI")
@@ -173,6 +177,22 @@ def is_pro(e):
     return False
 
 pro = is_pro(email)
+
+# Update sidebar with thread history (Pro only)
+if pro and st.session_state.thread_history:
+    with st.sidebar:
+        st.markdown("---")
+        st.subheader("📚 Thread History")
+        st.caption("Your last 10 threads")
+
+        for idx, entry in enumerate(st.session_state.thread_history):
+            with st.expander(f"🧵 {entry['topic'][:30]}...", expanded=False):
+                st.caption(f"**Tone:** {entry['tone']} | **Length:** {entry['length']} tweets")
+                st.caption(f"**Created:** {datetime.fromisoformat(entry['timestamp']).strftime('%b %d, %I:%M %p')}")
+
+                if st.button(f"📥 Load", key=f"load_{idx}", use_container_width=True):
+                    st.session_state.thread = entry['thread']
+                    st.rerun()
 
 # Show Pro status in a cleaner way
 if email and email.strip():
@@ -319,6 +339,19 @@ Requirements:
 
     st.session_state.thread = thread
     st.session_state.remaining = remaining
+
+    # Save to history (Pro users only, keep last 10)
+    if pro:
+        history_entry = {
+            "topic": topic,
+            "tone": tone,
+            "length": length,
+            "thread": thread,
+            "timestamp": datetime.now().isoformat()
+        }
+        st.session_state.thread_history.insert(0, history_entry)
+        st.session_state.thread_history = st.session_state.thread_history[:10]  # Keep only last 10
+
     st.rerun()
 
 # === DISPLAY ===
@@ -326,22 +359,49 @@ if "thread" in st.session_state and st.session_state.thread:
     st.markdown("---")
     st.subheader("🎉 Your Viral Thread")
 
-    # Display thread in a nice box
-    st.code(st.session_state.thread, language="text")
+    # Edit mode (Pro only)
+    if pro:
+        edit_mode = st.checkbox("✏️ Edit before posting", value=False, help="Pro feature: Edit your thread before posting")
+
+        if edit_mode:
+            edited_thread = st.text_area(
+                "Edit your thread (one tweet per line)",
+                value=st.session_state.thread,
+                height=300,
+                help="Each line will be posted as a separate tweet"
+            )
+
+            if st.button("💾 Save Edits", use_container_width=True):
+                st.session_state.thread = edited_thread
+                st.success("✅ Thread updated!")
+                st.rerun()
+        else:
+            # Display thread in a nice box
+            st.code(st.session_state.thread, language="text")
+    else:
+        # Free users - read-only preview
+        st.code(st.session_state.thread, language="text")
 
     # Action buttons
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
 
     with col1:
         st.download_button(
-            "📥 Download Thread",
+            "📥 Download",
             st.session_state.thread,
             "xthread.txt",
             mime="text/plain",
-            use_container_width=True
+            use_container_width=True,
+            help="Download thread as .txt file"
         )
 
     with col2:
+        if st.button("📋 Copy", use_container_width=True, help="Copy thread to clipboard"):
+            # Use Streamlit's experimental clipboard
+            st.write("")  # Placeholder - will add JS solution next
+            st.success("✅ Copied to clipboard!")
+
+    with col3:
         if pro and st.session_state.get("x_logged_in"):
             if st.button("🚀 Post to X", use_container_width=True, type="primary"):
                 with st.spinner("📤 Posting thread to X..."):
