@@ -61,29 +61,50 @@ def cleanup_oauth_secret(oauth_token):
 # === MODEL ===
 @st.cache_resource
 def get_model():
-    try:
-        models = [m.name.split("/")[-1] for m in genai.list_models() if "generateContent" in m.supported_generation_methods]
-        st.info(f"Available models: {', '.join(models[:5])}")
-    except Exception as e:
-        st.warning(f"Could not list models: {e}")
-
+    # Try models in order of preference
     for name in ("gemini-2.0-flash-exp", "gemini-2.5-flash", "gemini-2.5-pro"):
         try:
             m = genai.GenerativeModel(name)
+            # Test the model
             test_response = m.generate_content("hi")
             if test_response and test_response.text:
-                st.success(f"✅ Using {name}")
                 return m
-        except Exception as e:
-            st.warning(f"Could not load {name}: {e}")
+        except Exception:
             continue
 
-    st.error("❌ No model available. Please check your GEMINI_API_KEY in Streamlit secrets.")
+    # If no model works, show error
+    st.error("❌ AI service unavailable. Please contact support or try again later.")
     st.stop()
 
 model = get_model()
 
 st.set_page_config(page_title="XThreadMaster", page_icon="🚀", layout="centered")
+
+# === SIDEBAR ===
+with st.sidebar:
+    st.title("ℹ️ About")
+    st.markdown("""
+    **XThreadMaster** generates viral X/Twitter threads using AI.
+
+    ### ✨ Features
+    - 🤖 AI-powered thread generation
+    - 🎨 Multiple tone options
+    - 📥 Download as text file
+    - 🚀 Auto-post to X (Pro)
+
+    ### 🆓 Free Tier
+    - 3 generations per day
+    - Manual posting
+
+    ### 💎 Pro Benefits
+    - ♾️ Unlimited generations
+    - 🚀 One-click auto-posting
+    - 🔗 X account integration
+
+    ---
+
+    [Upgrade to Pro](https://buy.stripe.com/...)
+    """)
 
 # === INITIALIZE SESSION STATE ===
 if "gen_count" not in st.session_state:
@@ -95,15 +116,22 @@ if "x_logged_in" not in st.session_state:
 if "thread" not in st.session_state:
     st.session_state.thread = None
 
-st.title("XThreadMaster – Viral X Threads in 10s")
-st.markdown("**Generate, download, or auto-post viral X threads with AI.**")
+st.title("🚀 XThreadMaster")
+st.markdown("Generate viral X threads in seconds with AI")
+st.markdown("---")
 
 # === INPUTS ===
-email = st.text_input("Email (for Pro features)", placeholder="you@email.com", help="Enter your email to check Pro subscription status")
+with st.expander("⚙️ Account Settings", expanded=False):
+    email = st.text_input("Email (optional - for Pro features)", placeholder="you@email.com", help="Enter your email to check Pro subscription status")
+
+st.subheader("📝 Thread Settings")
 col1, col2 = st.columns(2)
-with col1: topic = st.text_input("Topic", placeholder="AI side-hustles")
-with col2: tone = st.selectbox("Tone", ["Casual", "Funny", "Pro", "Degen"])
-length = st.slider("Length", 5, 15, 8)
+with col1:
+    topic = st.text_input("Topic*", placeholder="AI side-hustles, productivity tips, etc.", help="What should your thread be about?")
+with col2:
+    tone = st.selectbox("Tone", ["Casual", "Funny", "Pro", "Degen"], help="Choose the writing style")
+
+length = st.slider("Thread Length (tweets)", 5, 15, 8, help="Number of tweets in your thread")
 
 # === LIMIT ===
 if st.session_state.last_reset != date.today():
@@ -143,12 +171,13 @@ def is_pro(e):
 
 pro = is_pro(email)
 
-# Show Pro status
+# Show Pro status in a cleaner way
 if email and email.strip():
     if pro:
-        st.success("✅ Pro account active - Unlimited generations & auto-posting enabled!")
+        st.success("✅ **Pro Account Active** - Unlimited generations & auto-posting enabled")
     else:
-        st.info("🆓 Free tier - 3 generations per day. [Upgrade to Pro](https://buy.stripe.com/...) for unlimited access!")
+        remaining_today = 3 - st.session_state.gen_count
+        st.info(f"🆓 **Free Tier** - {remaining_today} generations remaining today | [Upgrade to Pro](https://buy.stripe.com/...) for unlimited access")
 
 # === OAUTH: STATE PARAMETER (NO SESSION LOSS) ===
 query = st.query_params
@@ -210,60 +239,79 @@ if "oauth_verifier" in query and "oauth_token" in query:
             st.session_state.processing_oauth = False
             st.query_params.clear()
 
-# LOGIN BUTTON
-if not st.session_state.get("x_logged_in"):
-    st.info("🔗 Connect your X account to enable auto-posting (Pro feature)")
+# X ACCOUNT CONNECTION (Pro Only)
+if pro:
+    st.markdown("---")
+    st.subheader("🔗 X Account Connection")
 
-    if st.button("🚀 Connect X Account (Pro)", use_container_width=True):
-        auth = tweepy.OAuth1UserHandler(
-            st.secrets["X_CONSUMER_KEY"],
-            st.secrets["X_CONSUMER_SECRET"],
-            callback="https://xthreadmaster.streamlit.app"
-        )
-        try:
-            auth_url = auth.get_authorization_url(signin_with_twitter=True)
-            rt = auth.request_token
+    if not st.session_state.get("x_logged_in"):
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.write("Connect your X account to enable one-click auto-posting")
+        with col2:
+            if st.button("Connect X Account", use_container_width=True, type="secondary"):
+                auth = tweepy.OAuth1UserHandler(
+                    st.secrets["X_CONSUMER_KEY"],
+                    st.secrets["X_CONSUMER_SECRET"],
+                    callback="https://xthreadmaster.streamlit.app"
+                )
+                try:
+                    auth_url = auth.get_authorization_url(signin_with_twitter=True)
+                    rt = auth.request_token
 
-            # Store token secret in temporary file storage (survives redirect)
-            save_oauth_secret(rt["oauth_token"], rt["oauth_token_secret"])
+                    # Store token secret in temporary file storage (survives redirect)
+                    save_oauth_secret(rt["oauth_token"], rt["oauth_token_secret"])
 
-            st.markdown(f"### [👉 Click here to authorize with X]({auth_url})")
-            st.warning("⚠️ You will be redirected to X. After authorizing, you'll return here automatically.")
-            st.info("💡 **Important:** Complete the authorization within 10 minutes.")
-        except Exception as e:
-            st.error(f"❌ Setup failed: {e}")
+                    st.markdown(f"### [👉 Click here to authorize with X]({auth_url})")
+                    st.info("💡 You'll be redirected to X. After authorizing, you'll return automatically (within 10 minutes).")
+                except Exception as e:
+                    st.error(f"❌ Setup failed: {e}")
 
-# LOGGED IN
-else:
-    col1, col2 = st.columns(2)
-    username = st.session_state.get("x_username", "Unknown")
-    with col1: st.success(f"✅ Connected as @{username}")
-    with col2:
-        if st.button("Disconnect", use_container_width=True):
-            for k in ["x_access_token", "x_access_secret", "x_username", "x_logged_in"]:
-                st.session_state.pop(k, None)
-            st.rerun()
+    # LOGGED IN
+    else:
+        col1, col2 = st.columns([2, 1])
+        username = st.session_state.get("x_username", "Unknown")
+        with col1:
+            st.success(f"✅ Connected as @{username}")
+        with col2:
+            if st.button("Disconnect", use_container_width=True):
+                for k in ["x_access_token", "x_access_secret", "x_username", "x_logged_in"]:
+                    st.session_state.pop(k, None)
+                st.rerun()
 
 # === GENERATE ===
-if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
+st.markdown("---")
+
+if st.button("✨ Generate Viral Thread", type="primary", use_container_width=True):
     if not topic.strip():
-        st.warning("Enter topic!")
+        st.warning("⚠️ Please enter a topic for your thread")
         st.stop()
 
     if not pro and st.session_state.gen_count >= 3:
-        st.error("Free limit: 3/day.")
-        with st.expander("Pro"): st.markdown("**[Buy](https://buy.stripe.com/...)***")
+        st.error("🚫 Free limit reached: 3 generations per day")
+        st.info("💎 [Upgrade to Pro](https://buy.stripe.com/...) for unlimited generations and auto-posting")
         st.stop()
 
-    if not pro: st.session_state.gen_count += 1
+    if not pro:
+        st.session_state.gen_count += 1
     remaining = 3 - st.session_state.gen_count if not pro else None
 
-    with st.spinner("Generating..."):
-        prompt = f"VIRAL X thread: \"{topic}\"\n- {length} tweets\n- Tone: {tone}\n- Hook → Value → CTA\n- Emojis\n- <100 chars\n- ONE PER LINE"
+    with st.spinner("🤖 Generating your viral thread..."):
+        prompt = f"""Create a VIRAL X/Twitter thread about: "{topic}"
+
+Requirements:
+- Exactly {length} tweets
+- Tone: {tone}
+- Structure: Hook → Value → CTA
+- Use relevant emojis
+- Keep each tweet under 280 characters
+- Make it engaging and shareable
+- Format: ONE TWEET PER LINE"""
+
         try:
             thread = model.generate_content(prompt).text.strip()
         except Exception as e:
-            st.error(f"AI error: {e}")
+            st.error(f"❌ AI generation failed: {e}")
             st.stop()
 
     st.session_state.thread = thread
@@ -272,56 +320,78 @@ if st.button("GENERATE VIRAL THREAD", type="primary", use_container_width=True):
 
 # === DISPLAY ===
 if "thread" in st.session_state and st.session_state.thread:
+    st.markdown("---")
+    st.subheader("🎉 Your Viral Thread")
+
+    # Display thread in a nice box
     st.code(st.session_state.thread, language="text")
-    st.download_button("📥 Download .txt", st.session_state.thread, "thread.txt", mime="text/plain")
 
-    if pro and st.session_state.get("x_logged_in"):
-        if st.button("🚀 Auto-Post to X", use_container_width=True, type="primary"):
-            with st.spinner("Posting thread to X..."):
-                try:
-                    client = tweepy.Client(
-                        consumer_key=st.secrets["X_CONSUMER_KEY"],
-                        consumer_secret=st.secrets["X_CONSUMER_SECRET"],
-                        access_token=st.session_state.x_access_token,
-                        access_token_secret=st.session_state.x_access_secret,
-                    )
+    # Action buttons
+    col1, col2 = st.columns(2)
 
-                    tweets = [t.strip() for t in st.session_state.thread.split("\n") if t.strip()]
+    with col1:
+        st.download_button(
+            "📥 Download Thread",
+            st.session_state.thread,
+            "xthread.txt",
+            mime="text/plain",
+            use_container_width=True
+        )
 
-                    if not tweets:
-                        st.error("❌ No tweets to post!")
-                        st.stop()
+    with col2:
+        if pro and st.session_state.get("x_logged_in"):
+            if st.button("🚀 Post to X", use_container_width=True, type="primary"):
+                with st.spinner("📤 Posting thread to X..."):
+                    try:
+                        client = tweepy.Client(
+                            consumer_key=st.secrets["X_CONSUMER_KEY"],
+                            consumer_secret=st.secrets["X_CONSUMER_SECRET"],
+                            access_token=st.session_state.x_access_token,
+                            access_token_secret=st.session_state.x_access_secret,
+                        )
 
-                    # Post first tweet
-                    first = client.create_tweet(text=tweets[0])
-                    tid = first.data["id"]
-                    posted_count = 1
+                        tweets = [t.strip() for t in st.session_state.thread.split("\n") if t.strip()]
 
-                    # Post remaining tweets as replies
-                    for t in tweets[1:]:
-                        try:
-                            resp = client.create_tweet(in_reply_to_tweet_id=tid, text=t)
-                            tid = resp.data["id"]
-                            posted_count += 1
-                        except Exception as e:
-                            st.warning(f"⚠️ Failed to post tweet {posted_count + 1}: {e}")
-                            break
+                        if not tweets:
+                            st.error("❌ No tweets to post!")
+                            st.stop()
 
-                    url = f"https://x.com/{st.session_state.x_username}/status/{first.data['id']}"
-                    st.success(f"✅ Posted {posted_count}/{len(tweets)} tweets! [View Thread]({url})")
-                    st.balloons()
+                        # Post first tweet
+                        first = client.create_tweet(text=tweets[0])
+                        tid = first.data["id"]
+                        posted_count = 1
 
-                except tweepy.errors.Unauthorized:
-                    st.error("❌ X authorization expired. Please reconnect your account.")
-                    st.session_state.x_logged_in = False
-                except tweepy.errors.Forbidden as e:
-                    st.error(f"❌ X API access forbidden: {e}")
-                except Exception as e:
-                    st.error(f"❌ Failed to post: {e}")
+                        # Post remaining tweets as replies
+                        for t in tweets[1:]:
+                            try:
+                                resp = client.create_tweet(in_reply_to_tweet_id=tid, text=t)
+                                tid = resp.data["id"]
+                                posted_count += 1
+                            except Exception as e:
+                                st.warning(f"⚠️ Failed to post tweet {posted_count + 1}: {e}")
+                                break
+
+                        url = f"https://x.com/{st.session_state.x_username}/status/{first.data['id']}"
+                        st.success(f"✅ Posted {posted_count}/{len(tweets)} tweets!")
+                        st.markdown(f"### [🔗 View Your Thread on X]({url})")
+                        st.balloons()
+
+                    except tweepy.errors.Unauthorized:
+                        st.error("❌ X authorization expired. Please reconnect your account.")
+                        st.session_state.x_logged_in = False
+                    except tweepy.errors.Forbidden as e:
+                        st.error(f"❌ X API access forbidden: {e}")
+                    except Exception as e:
+                        st.error(f"❌ Failed to post: {e}")
+        elif pro and not st.session_state.get("x_logged_in"):
+            st.info("🔗 Connect your X account above to enable auto-posting")
+        else:
+            st.info("💎 Upgrade to Pro to enable auto-posting")
 
     # Show remaining generations for free users
     if not pro and "remaining" in st.session_state and st.session_state.remaining is not None:
-        st.info(f"📊 Free tier: {st.session_state.remaining} generations remaining today")
+        st.divider()
+        st.info(f"📊 **Free Tier:** {st.session_state.remaining} generations remaining today")
 
 st.markdown("---")
-st.caption("**Grok + Streamlit**")
+st.caption("Made with ❤️ using Gemini AI • [Upgrade to Pro](https://buy.stripe.com/...)")
