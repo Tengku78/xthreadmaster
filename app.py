@@ -129,7 +129,16 @@ st.markdown("---")
 
 # === INPUTS ===
 with st.expander("⚙️ Account Settings", expanded=False):
-    email = st.text_input("Email (optional - for Pro features)", placeholder="you@email.com", help="Enter your email to check Pro subscription status")
+    email = st.text_input(
+        "Email (optional - for Pro features)",
+        value=st.session_state.get("saved_email", ""),
+        placeholder="you@email.com",
+        help="Enter your email to check Pro subscription status"
+    )
+
+    # Save email to session state when changed
+    if email and email.strip() and email != st.session_state.get("saved_email"):
+        st.session_state.saved_email = email
 
 st.subheader("📝 Thread Settings")
 col1, col2 = st.columns(2)
@@ -179,20 +188,23 @@ def is_pro(e):
 pro = is_pro(email)
 
 # Update sidebar with thread history (Pro only)
-if pro and st.session_state.thread_history:
+if pro:
     with st.sidebar:
         st.markdown("---")
         st.subheader("📚 Thread History")
-        st.caption("Your last 10 threads")
 
-        for idx, entry in enumerate(st.session_state.thread_history):
-            with st.expander(f"🧵 {entry['topic'][:30]}...", expanded=False):
-                st.caption(f"**Tone:** {entry['tone']} | **Length:** {entry['length']} tweets")
-                st.caption(f"**Created:** {datetime.fromisoformat(entry['timestamp']).strftime('%b %d, %I:%M %p')}")
+        if st.session_state.thread_history:
+            st.caption("Your last 10 threads")
+            for idx, entry in enumerate(st.session_state.thread_history):
+                with st.expander(f"🧵 {entry['topic'][:30]}...", expanded=False):
+                    st.caption(f"**Tone:** {entry['tone']} | **Length:** {entry['length']} tweets")
+                    st.caption(f"**Created:** {datetime.fromisoformat(entry['timestamp']).strftime('%b %d, %I:%M %p')}")
 
-                if st.button(f"📥 Load", key=f"load_{idx}", use_container_width=True):
-                    st.session_state.thread = entry['thread']
-                    st.rerun()
+                    if st.button(f"📥 Load", key=f"load_{idx}", use_container_width=True):
+                        st.session_state.thread = entry['thread']
+                        st.rerun()
+        else:
+            st.caption("Generate threads to see them here!")
 
 # Show Pro status in a cleaner way
 if email and email.strip():
@@ -301,6 +313,10 @@ if pro:
                 for k in ["x_access_token", "x_access_secret", "x_username", "x_logged_in"]:
                     st.session_state.pop(k, None)
                 st.rerun()
+
+        # Helpful note if email not entered
+        if not email or not email.strip():
+            st.info("💡 **Tip:** Enter your Pro email in Account Settings above to enable auto-posting!")
 
 # === GENERATE ===
 st.markdown("---")
