@@ -10,6 +10,9 @@ import tempfile
 # === CONFIG ===
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
+# Get Stripe payment link from secrets (with fallback)
+STRIPE_PAYMENT_LINK = st.secrets.get("STRIPE_PAYMENT_LINK", "#")
+
 # === OAUTH TOKEN STORAGE ===
 # Helper functions to store/retrieve OAuth tokens temporarily
 def save_oauth_secret(oauth_token, oauth_secret):
@@ -103,8 +106,8 @@ with st.sidebar:
 
     ---
 
-    [Upgrade to Pro](https://buy.stripe.com/...)
-    """)
+    [Upgrade to Pro]({STRIPE_PAYMENT_LINK})
+    """.replace("{STRIPE_PAYMENT_LINK}", STRIPE_PAYMENT_LINK))
 
 # === INITIALIZE SESSION STATE ===
 if "gen_count" not in st.session_state:
@@ -177,7 +180,7 @@ if email and email.strip():
         st.success("✅ **Pro Account Active** - Unlimited generations & auto-posting enabled")
     else:
         remaining_today = 3 - st.session_state.gen_count
-        st.info(f"🆓 **Free Tier** - {remaining_today} generations remaining today | [Upgrade to Pro](https://buy.stripe.com/...) for unlimited access")
+        st.info(f"🆓 **Free Tier** - {remaining_today} generations remaining today | [Upgrade to Pro]({STRIPE_PAYMENT_LINK}) for unlimited access")
 
 # === OAUTH: STATE PARAMETER (NO SESSION LOSS) ===
 query = st.query_params
@@ -289,7 +292,7 @@ if st.button("✨ Generate Viral Thread", type="primary", use_container_width=Tr
 
     if not pro and st.session_state.gen_count >= 3:
         st.error("🚫 Free limit reached: 3 generations per day")
-        st.info("💎 [Upgrade to Pro](https://buy.stripe.com/...) for unlimited generations and auto-posting")
+        st.info(f"💎 [Upgrade to Pro]({STRIPE_PAYMENT_LINK}) for unlimited generations and auto-posting")
         st.stop()
 
     if not pro:
@@ -394,4 +397,4 @@ if "thread" in st.session_state and st.session_state.thread:
         st.info(f"📊 **Free Tier:** {st.session_state.remaining} generations remaining today")
 
 st.markdown("---")
-st.caption("Made with ❤️ using Gemini AI • [Upgrade to Pro](https://buy.stripe.com/...)")
+st.caption(f"Made with ❤️ using Gemini AI • [Upgrade to Pro]({STRIPE_PAYMENT_LINK})")
