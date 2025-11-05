@@ -6,6 +6,11 @@ import json
 from datetime import date, datetime
 import os
 import tempfile
+import zipfile
+import io
+import re
+from PIL import Image
+import base64
 
 # === CONFIG ===
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
@@ -128,6 +133,8 @@ if "thread" not in st.session_state:
     st.session_state.thread = None
 if "carousel" not in st.session_state:
     st.session_state.carousel = None
+if "carousel_images" not in st.session_state:
+    st.session_state.carousel_images = []
 if "platform" not in st.session_state:
     st.session_state.platform = "X Thread"
 if "thread_history" not in st.session_state:
@@ -209,6 +216,12 @@ def get_user_tier(e):
 
 # Get user tier
 user_tier = get_user_tier(email)
+
+# TEMPORARY: Test mode for Visual Pack (remove after testing)
+# Uncomment the line below and add your test email to test Visual Pack
+# if email == "your-test-email@example.com":
+#     user_tier = 'visual_pack'
+
 pro = user_tier in ['pro', 'visual_pack']
 visual_pack = user_tier == 'visual_pack'
 
@@ -410,7 +423,18 @@ Requirements:
             try:
                 thread = model.generate_content(prompt).text.strip()
             except Exception as e:
-                st.error(f"❌ AI generation failed: {e}")
+                error_msg = str(e)
+                if "429" in error_msg or "Resource exhausted" in error_msg:
+                    st.error("⏱️ **API Rate Limit Reached**")
+                    st.warning("The AI service is temporarily at capacity. This happens on the free tier.")
+                    st.info("""
+                    **Solutions:**
+                    1. Wait 1-2 hours and try again
+                    2. Upgrade your Google AI API to paid tier for higher limits
+                    3. Contact support if this persists
+                    """)
+                else:
+                    st.error(f"❌ AI generation failed: {error_msg}")
                 st.stop()
 
         st.session_state.thread = thread
@@ -437,10 +461,72 @@ Requirements:
             try:
                 carousel = model.generate_content(prompt).text.strip()
             except Exception as e:
-                st.error(f"❌ AI generation failed: {e}")
+                error_msg = str(e)
+                if "429" in error_msg or "Resource exhausted" in error_msg:
+                    st.error("⏱️ **API Rate Limit Reached**")
+                    st.warning("The AI service is temporarily at capacity. This happens on the free tier.")
+                    st.info("""
+                    **Solutions:**
+                    1. Wait 1-2 hours and try again
+                    2. Upgrade your Google AI API to paid tier for higher limits
+                    3. Contact support if this persists
+                    """)
+                else:
+                    st.error(f"❌ AI generation failed: {error_msg}")
+                st.stop()
+
+        # Generate images for each slide
+        with st.spinner("🖼️ Generating AI images for your carousel..."):
+            carousel_images = []
+
+            # Parse carousel to extract slide titles for image generation
+            slides = []
+            for line in carousel.split('\n'):
+                if line.strip().startswith('SLIDE'):
+                    # Extract title from "SLIDE X: Title"
+                    if ':' in line:
+                        title = line.split(':', 1)[1].strip()
+                        slides.append(title)
+
+            # Generate images using Gemini 2.0 Imagen
+            image_model = genai.GenerativeModel('gemini-2.0-flash-exp')
+
+            for i, slide_title in enumerate(slides, 1):
+                try:
+                    # Create image prompt based on slide content and topic
+                    img_prompt = f"""Create a professional, eye-catching Instagram carousel image for:
+Topic: {topic}
+Slide: {slide_title}
+
+Style: Modern, clean, vibrant, social media optimized
+Requirements: No text overlay, visually striking, relevant to the topic"""
+
+                    # Generate image
+                    response = image_model.generate_content(img_prompt)
+
+                    # Extract image data
+                    if hasattr(response, 'parts') and response.parts:
+                        for part in response.parts:
+                            if hasattr(part, 'inline_data'):
+                                img_bytes = part.inline_data.data
+                                carousel_images.append({
+                                    'data': img_bytes,
+                                    'slide_num': i,
+                                    'title': slide_title
+                                })
+                                break
+
+                except Exception as e:
+                    st.warning(f"⚠️ Could not generate image for slide {i}: {str(e)}")
+                    # Continue with other slides even if one fails
+                    continue
+
+            if not carousel_images:
+                st.error("❌ Failed to generate any images. Please try again.")
                 st.stop()
 
         st.session_state.carousel = carousel
+        st.session_state.carousel_images = carousel_images
         st.session_state.platform = "Instagram Carousel"
 
     # Save to history (Pro users only, keep last 10)
@@ -559,6 +645,74 @@ if "thread" in st.session_state and st.session_state.thread:
     if not pro and "remaining" in st.session_state and st.session_state.remaining is not None:
         st.divider()
         st.info(f"📊 **Free Tier:** {st.session_state.remaining} generations remaining today")
+
+# === CAROUSEL DISPLAY ===
+if "carousel" in st.session_state and st.session_state.carousel and st.session_state.platform == "Instagram Carousel":
+    st.markdown("---")
+    st.subheader("🎨 Your Instagram Carousel")
+
+    # Display carousel text
+    st.markdown("### 📝 Carousel Captions")
+    st.code(st.session_state.carousel, language="text")
+
+    # Display generated images
+    if st.session_state.carousel_images:
+        st.markdown("### 🖼️ AI-Generated Images")
+
+        # Display images in a grid
+        for img_data in st.session_state.carousel_images:
+            st.markdown(f"**Slide {img_data['slide_num']}: {img_data['title']}**")
+
+            # Convert bytes to image and display
+            img = Image.open(io.BytesIO(img_data['data']))
+            st.image(img, use_container_width=True)
+            st.markdown("---")
+
+        # Action buttons
+        col1, col2 = st.columns(2)
+
+        with col1:
+            # Download captions as text
+            st.download_button(
+                "📥 Download Captions",
+                st.session_state.carousel,
+                "carousel_captions.txt",
+                mime="text/plain",
+                use_container_width=True,
+                help="Download carousel captions as .txt file"
+            )
+
+        with col2:
+            # Download as ZIP with images and captions
+            if st.button("📦 Download ZIP (Images + Captions)", use_container_width=True, type="primary"):
+                with st.spinner("📦 Preparing your carousel package..."):
+                    # Create ZIP file in memory
+                    zip_buffer = io.BytesIO()
+
+                    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                        # Add captions file
+                        zip_file.writestr("captions.txt", st.session_state.carousel)
+
+                        # Add images
+                        for img_data in st.session_state.carousel_images:
+                            img_filename = f"slide_{img_data['slide_num']:02d}.jpg"
+                            zip_file.writestr(img_filename, img_data['data'])
+
+                    zip_buffer.seek(0)
+
+                    st.download_button(
+                        "✅ Click to Download ZIP",
+                        zip_buffer,
+                        "instagram_carousel.zip",
+                        mime="application/zip",
+                        use_container_width=True
+                    )
+                    st.success("✅ Carousel package ready!")
+
+        st.info("💡 **Next Steps:** Upload these images to Instagram in order, then copy-paste the captions!")
+
+    else:
+        st.warning("⚠️ No images were generated. Please try again.")
 
 st.markdown("---")
 st.caption(f"Made with ❤️ using Gemini AI • [Upgrade to Pro]({STRIPE_PAYMENT_LINK})")
