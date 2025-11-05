@@ -87,28 +87,34 @@ st.set_page_config(page_title="XThreadMaster", page_icon="🚀", layout="centere
 with st.sidebar:
     st.title("ℹ️ About")
     st.markdown("""
-    **XThreadMaster** generates viral X/Twitter threads using AI.
+    **XThreadMaster** generates viral content for X & Instagram using AI.
 
     ### ✨ Features
-    - 🤖 AI-powered thread generation
+    - 🤖 AI-powered content generation
     - 🎨 Multiple tone options
-    - 📥 Download as text file
-    - 🚀 Auto-post to X (Pro)
+    - 📥 Download content
+    - 🚀 Auto-post to X (Pro+)
 
     ### 🆓 Free Tier
-    - 3 generations per day
+    - 3 X threads per day
     - Manual posting
 
-    ### 💎 Pro Benefits
-    - ♾️ Unlimited generations
-    - 🚀 One-click auto-posting
+    ### 💎 Pro ($12/mo)
+    - ♾️ Unlimited X threads
+    - 🚀 One-click auto-posting to X
     - 🔗 X account integration
     - ✏️ Edit before posting
     - 📚 Thread history (last 10)
 
+    ### 🎨 Visual Pack ($17/mo)
+    - ✅ Everything in Pro
+    - 📸 Instagram carousel generation
+    - 🖼️ AI-generated images (Gemini)
+    - 💾 Download as ZIP
+
     ---
 
-    [Upgrade to Pro]({STRIPE_PAYMENT_LINK})
+    [Upgrade Now]({STRIPE_PAYMENT_LINK})
     """.replace("{STRIPE_PAYMENT_LINK}", STRIPE_PAYMENT_LINK))
 
 # === INITIALIZE SESSION STATE ===
@@ -120,6 +126,10 @@ if "x_logged_in" not in st.session_state:
     st.session_state.x_logged_in = False
 if "thread" not in st.session_state:
     st.session_state.thread = None
+if "carousel" not in st.session_state:
+    st.session_state.carousel = None
+if "platform" not in st.session_state:
+    st.session_state.platform = "X Thread"
 if "thread_history" not in st.session_state:
     st.session_state.thread_history = []
 
@@ -140,24 +150,20 @@ with st.expander("⚙️ Account Settings", expanded=False):
     if email and email.strip() and email != st.session_state.get("saved_email"):
         st.session_state.saved_email = email
 
-st.subheader("📝 Thread Settings")
-col1, col2 = st.columns(2)
-with col1:
-    topic = st.text_input("Topic*", placeholder="AI side-hustles, productivity tips, etc.", help="What should your thread be about?")
-with col2:
-    tone = st.selectbox("Tone", ["Casual", "Funny", "Pro", "Degen"], help="Choose the writing style")
-
-length = st.slider("Thread Length (tweets)", 5, 15, 8, help="Number of tweets in your thread")
-
 # === LIMIT ===
 if st.session_state.last_reset != date.today():
     st.session_state.gen_count = 0
     st.session_state.last_reset = date.today()
 
-# === PRO ===
-def is_pro(e):
+# === SUBSCRIPTION TIERS ===
+def get_user_tier(e):
+    """
+    Check user's subscription tier via Stripe.
+    Returns: 'free', 'pro' ($12/mo), or 'visual_pack' ($17/mo)
+    """
     if not e or not e.strip():
-        return False
+        return 'free'
+
     try:
         # Check Stripe for active subscriptions
         custs_response = requests.get(
@@ -176,16 +182,61 @@ def is_pro(e):
                 timeout=10
             )
             subs = subs_response.json().get("data", [])
+
+            for sub in subs:
+                # Get the price amount to determine tier
+                items = sub.get("items", {}).get("data", [])
+                if items:
+                    price = items[0].get("price", {})
+                    amount = price.get("unit_amount", 0) / 100  # Convert cents to dollars
+
+                    # Determine tier based on price
+                    if amount >= 17:
+                        return 'visual_pack'  # $17/mo - Instagram + X
+                    elif amount >= 12:
+                        return 'pro'  # $12/mo - X only
+
+            # If we found subscriptions but couldn't parse price, default to pro
             if subs:
-                return True
+                return 'pro'
+
     except requests.exceptions.RequestException as e:
-        st.warning(f"⚠️ Could not verify Pro status: {e}")
+        st.warning(f"⚠️ Could not verify subscription: {e}")
     except Exception as e:
         st.warning(f"⚠️ Stripe verification error: {e}")
 
-    return False
+    return 'free'
 
-pro = is_pro(email)
+# Get user tier
+user_tier = get_user_tier(email)
+pro = user_tier in ['pro', 'visual_pack']
+visual_pack = user_tier == 'visual_pack'
+
+# === CONTENT SETTINGS ===
+st.subheader("📝 Content Settings")
+
+# Platform selector
+platform_options = ["X Thread"]
+if visual_pack:
+    platform_options.append("Instagram Carousel")
+
+platform = st.selectbox(
+    "Platform*",
+    platform_options,
+    help="Choose which platform to generate content for"
+)
+
+col1, col2 = st.columns(2)
+with col1:
+    topic = st.text_input("Topic*", placeholder="AI side-hustles, productivity tips, etc.", help="What should your content be about?")
+with col2:
+    tone = st.selectbox("Tone", ["Casual", "Funny", "Pro", "Degen"], help="Choose the writing style")
+
+# Dynamic length slider based on platform
+if platform == "X Thread":
+    length = st.slider("Thread Length (tweets)", 5, 15, 8, help="Number of tweets in your thread")
+else:  # Instagram Carousel
+    length = st.slider("Carousel Length (slides)", 5, 10, 7, help="Number of slides in your carousel")
 
 # Update sidebar with thread history (Pro only)
 if pro:
@@ -206,10 +257,13 @@ if pro:
         else:
             st.caption("Generate threads to see them here!")
 
-# Show Pro status in a cleaner way
+# Show subscription status
 if email and email.strip():
-    if pro:
-        st.success("✅ **Pro Account Active** - Unlimited generations & auto-posting enabled")
+    if visual_pack:
+        st.success("✅ **Visual Pack Active** - X threads + Instagram carousels with AI images")
+    elif pro:
+        st.success("✅ **Pro Account Active** - Unlimited X threads & auto-posting")
+        st.info("💎 Upgrade to Visual Pack ($17/mo) to unlock Instagram carousels with AI images")
     else:
         remaining_today = 3 - st.session_state.gen_count
         st.info(f"🆓 **Free Tier** - {remaining_today} generations remaining today | [Upgrade to Pro]({STRIPE_PAYMENT_LINK}) for unlimited access")
@@ -321,9 +375,12 @@ if st.session_state.get("x_logged_in") and (not email or not email.strip()):
 # === GENERATE ===
 st.markdown("---")
 
-if st.button("✨ Generate Viral Thread", type="primary", use_container_width=True):
+# Dynamic button text
+button_text = "✨ Generate Viral Thread" if platform == "X Thread" else "🎨 Generate Instagram Carousel"
+
+if st.button(button_text, type="primary", use_container_width=True):
     if not topic.strip():
-        st.warning("⚠️ Please enter a topic for your thread")
+        st.warning("⚠️ Please enter a topic")
         st.stop()
 
     if not pro and st.session_state.gen_count >= 3:
@@ -335,8 +392,11 @@ if st.button("✨ Generate Viral Thread", type="primary", use_container_width=Tr
         st.session_state.gen_count += 1
     remaining = 3 - st.session_state.gen_count if not pro else None
 
-    with st.spinner("🤖 Generating your viral thread..."):
-        prompt = f"""Create a VIRAL X/Twitter thread about: "{topic}"
+    # Generate based on platform
+    if platform == "X Thread":
+        # Generate X Thread
+        with st.spinner("🤖 Generating your viral thread..."):
+            prompt = f"""Create a VIRAL X/Twitter thread about: "{topic}"
 
 Requirements:
 - Exactly {length} tweets
@@ -347,14 +407,41 @@ Requirements:
 - Make it engaging and shareable
 - Format: ONE TWEET PER LINE"""
 
-        try:
-            thread = model.generate_content(prompt).text.strip()
-        except Exception as e:
-            st.error(f"❌ AI generation failed: {e}")
-            st.stop()
+            try:
+                thread = model.generate_content(prompt).text.strip()
+            except Exception as e:
+                st.error(f"❌ AI generation failed: {e}")
+                st.stop()
 
-    st.session_state.thread = thread
-    st.session_state.remaining = remaining
+        st.session_state.thread = thread
+        st.session_state.platform = "X Thread"
+        st.session_state.remaining = remaining
+
+    else:  # Instagram Carousel
+        # Generate Instagram Carousel
+        with st.spinner("🎨 Generating your Instagram carousel..."):
+            prompt = f"""Create a VIRAL Instagram carousel about: "{topic}"
+
+Requirements:
+- Exactly {length} slides
+- Tone: {tone}
+- Each slide should have a catchy title (max 5 words) and description (2-3 sentences)
+- Use relevant emojis
+- Make it visually engaging and shareable
+- Format: For each slide, write:
+  SLIDE X: [Title]
+  [Description]
+
+  One slide per section."""
+
+            try:
+                carousel = model.generate_content(prompt).text.strip()
+            except Exception as e:
+                st.error(f"❌ AI generation failed: {e}")
+                st.stop()
+
+        st.session_state.carousel = carousel
+        st.session_state.platform = "Instagram Carousel"
 
     # Save to history (Pro users only, keep last 10)
     if pro:
@@ -362,11 +449,12 @@ Requirements:
             "topic": topic,
             "tone": tone,
             "length": length,
-            "thread": thread,
+            "content": thread if platform == "X Thread" else carousel,
+            "platform": platform,
             "timestamp": datetime.now().isoformat()
         }
         st.session_state.thread_history.insert(0, history_entry)
-        st.session_state.thread_history = st.session_state.thread_history[:10]  # Keep only last 10
+        st.session_state.thread_history = st.session_state.thread_history[:10]
 
     st.rerun()
 
