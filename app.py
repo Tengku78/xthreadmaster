@@ -218,9 +218,8 @@ def get_user_tier(e):
 user_tier = get_user_tier(email)
 
 # TEMPORARY: Test mode for Visual Pack (remove after testing)
-# Uncomment the line below and add your test email to test Visual Pack
-# if email == "your-test-email@example.com":
-#     user_tier = 'visual_pack'
+if email == "testtest@gmail.com":
+    user_tier = 'visual_pack'
 
 pro = user_tier in ['pro', 'visual_pack']
 visual_pack = user_tier == 'visual_pack'
