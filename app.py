@@ -112,23 +112,29 @@ if "oauth_verifier" in query and "oauth_token" in query:
         verifier = query["oauth_verifier"]
         oauth_token = query["oauth_token"]
 
-        # Get state if available
-        state_data = None
+        # CRITICAL: Get state parameter which contains the token secret
+        req_secret = None
         if "state" in query:
             try:
                 state_data = json.loads(urllib.parse.unquote(query["state"]))
-            except:
-                pass
+                req_secret = state_data.get("secret")
+                st.info(f"🔍 Debug: Retrieved secret from state parameter")
+            except Exception as e:
+                st.error(f"❌ Failed to parse state: {e}")
 
-        # Try to get token secret from state or session
-        req_secret = None
-        if state_data and "secret" in state_data:
-            req_secret = state_data["secret"]
-        elif "oauth_token_secret" in st.session_state:
+        # Fallback: try session state (usually won't work after redirect)
+        if not req_secret and "oauth_token_secret" in st.session_state:
             req_secret = st.session_state.oauth_token_secret
+            st.info(f"🔍 Debug: Retrieved secret from session state")
 
         if not req_secret:
-            st.error("OAuth session lost. Please try connecting again.")
+            st.error("❌ OAuth session lost. The state parameter was not preserved during redirect.")
+            st.warning("📝 Debug info: This happens when X redirects back without the state parameter.")
+            st.info("💡 Try clicking the 'Connect X Account' button again and make sure you complete the authorization on X.")
+
+            # Show what we received
+            st.code(f"Received params: {dict(query)}")
+
             st.query_params.clear()
             st.session_state.processing_oauth = False
             st.stop()
@@ -165,6 +171,7 @@ if "oauth_verifier" in query and "oauth_token" in query:
             st.rerun()
         except Exception as e:
             st.error(f"❌ OAuth failed: {e}")
+            st.code(f"Error details: {str(e)}")
             st.session_state.processing_oauth = False
             st.query_params.clear()
 
