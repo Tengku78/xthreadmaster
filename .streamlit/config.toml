@@ -1,0 +1,17 @@
+[server]
+# Enable XSRF protection for better security
+enableXsrfProtection = true
+
+# Disable CORS for better session handling
+enableCORS = false
+
+# Session state configuration
+maxUploadSize = 200
+
+[browser]
+# Ensure cookies are enabled
+gatherUsageStats = false
+
+[client]
+# Show error details
+showErrorDetails = true

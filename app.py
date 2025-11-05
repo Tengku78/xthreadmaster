@@ -14,94 +14,165 @@ genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 def get_model():
     try:
         models = [m.name.split("/")[-1] for m in genai.list_models() if "generateContent" in m.supported_generation_methods]
-        st.info(f"Models: {models[:5]}")
-    except: pass
+        st.info(f"Available models: {', '.join(models[:5])}")
+    except Exception as e:
+        st.warning(f"Could not list models: {e}")
+
     for name in ("gemini-2.0-flash-exp", "gemini-2.5-flash", "gemini-2.5-pro"):
         try:
             m = genai.GenerativeModel(name)
-            if m.generate_content("hi").text:
-                st.success(f"Using {name}")
+            test_response = m.generate_content("hi")
+            if test_response and test_response.text:
+                st.success(f"✅ Using {name}")
                 return m
-        except: pass
-    st.error("No model. Check API key.")
+        except Exception as e:
+            st.warning(f"Could not load {name}: {e}")
+            continue
+
+    st.error("❌ No model available. Please check your GEMINI_API_KEY in Streamlit secrets.")
     st.stop()
 
 model = get_model()
 
-st.set_page_config(page_title="XThreadMaster", page_icon="rocket", layout="centered")
+st.set_page_config(page_title="XThreadMaster", page_icon="🚀", layout="centered")
+
+# === INITIALIZE SESSION STATE ===
+if "gen_count" not in st.session_state:
+    st.session_state.gen_count = 0
+if "last_reset" not in st.session_state:
+    st.session_state.last_reset = date.today()
+if "x_logged_in" not in st.session_state:
+    st.session_state.x_logged_in = False
+if "thread" not in st.session_state:
+    st.session_state.thread = None
+
 st.title("XThreadMaster – Viral X Threads in 10s")
-st.markdown("**Generate, download, or auto-post.**")
+st.markdown("**Generate, download, or auto-post viral X threads with AI.**")
 
 # === INPUTS ===
-email = st.text_input("Email (Pro)", placeholder="you@email.com")
+email = st.text_input("Email (for Pro features)", placeholder="you@email.com", help="Enter your email to check Pro subscription status")
 col1, col2 = st.columns(2)
 with col1: topic = st.text_input("Topic", placeholder="AI side-hustles")
 with col2: tone = st.selectbox("Tone", ["Casual", "Funny", "Pro", "Degen"])
 length = st.slider("Length", 5, 15, 8)
 
 # === LIMIT ===
-if "gen_count" not in st.session_state:
-    st.session_state.gen_count = 0
-    st.session_state.last_reset = date.today()
 if st.session_state.last_reset != date.today():
     st.session_state.gen_count = 0
     st.session_state.last_reset = date.today()
 
 # === PRO ===
 def is_pro(e):
-    if not e: return False
+    if not e or not e.strip():
+        return False
     try:
-        custs = requests.get("https://api.stripe.com/v1/customers", params={"email": e}, auth=(st.secrets["STRIPE_SECRET_KEY"], "")).json().get("data", [])
+        # Check Stripe for active subscriptions
+        custs_response = requests.get(
+            "https://api.stripe.com/v1/customers",
+            params={"email": e},
+            auth=(st.secrets["STRIPE_SECRET_KEY"], ""),
+            timeout=10
+        )
+        custs = custs_response.json().get("data", [])
+
         for c in custs:
-            subs = requests.get(f"https://api.stripe.com/v1/subscriptions", params={"customer": c["id"], "status": "active"}, auth=(st.secrets["STRIPE_SECRET_KEY"], "")).json().get("data", [])
-            if subs: return True
-    except: pass
+            subs_response = requests.get(
+                f"https://api.stripe.com/v1/subscriptions",
+                params={"customer": c["id"], "status": "active"},
+                auth=(st.secrets["STRIPE_SECRET_KEY"], ""),
+                timeout=10
+            )
+            subs = subs_response.json().get("data", [])
+            if subs:
+                return True
+    except requests.exceptions.RequestException as e:
+        st.warning(f"⚠️ Could not verify Pro status: {e}")
+    except Exception as e:
+        st.warning(f"⚠️ Stripe verification error: {e}")
+
     return False
+
 pro = is_pro(email)
+
+# Show Pro status
+if email and email.strip():
+    if pro:
+        st.success("✅ Pro account active - Unlimited generations & auto-posting enabled!")
+    else:
+        st.info("🆓 Free tier - 3 generations per day. [Upgrade to Pro](https://buy.stripe.com/...) for unlimited access!")
 
 # === OAUTH: STATE PARAMETER (NO SESSION LOSS) ===
 query = st.query_params
 
-# CALLBACK
-if "oauth_verifier" in query and "state" in query:
-    verifier = query["oauth_verifier"]
-    state = urllib.parse.unquote(query["state"])
-    try:
-        tokens = json.loads(state)
-        req_token = tokens["token"]
-        req_secret = tokens["secret"]
-    except:
-        st.error("Invalid state. Try again.")
-        st.stop()
+# CALLBACK - Handle OAuth return
+if "oauth_verifier" in query and "oauth_token" in query:
+    if not st.session_state.get("processing_oauth"):
+        st.session_state.processing_oauth = True
 
-    auth = tweepy.OAuth1UserHandler(
-        st.secrets["X_CONSUMER_KEY"],
-        st.secrets["X_CONSUMER_SECRET"],
-        callback="https://xthreadmaster.streamlit.app"
-    )
-    auth.request_token = {"oauth_token": req_token, "oauth_token_secret": req_secret}
-    try:
-        access = auth.get_access_token(verifier)
-        st.session_state.x_access_token = access[0]
-        st.session_state.x_access_secret = access[1]
-        st.session_state.x_logged_in = True
-        client = tweepy.Client(
-            consumer_key=st.secrets["X_CONSUMER_KEY"],
-            consumer_secret=st.secrets["X_CONSUMER_SECRET"],
-            access_token=access[0],
-            access_token_secret=access[1]
+        verifier = query["oauth_verifier"]
+        oauth_token = query["oauth_token"]
+
+        # Get state if available
+        state_data = None
+        if "state" in query:
+            try:
+                state_data = json.loads(urllib.parse.unquote(query["state"]))
+            except:
+                pass
+
+        # Try to get token secret from state or session
+        req_secret = None
+        if state_data and "secret" in state_data:
+            req_secret = state_data["secret"]
+        elif "oauth_token_secret" in st.session_state:
+            req_secret = st.session_state.oauth_token_secret
+
+        if not req_secret:
+            st.error("OAuth session lost. Please try connecting again.")
+            st.query_params.clear()
+            st.session_state.processing_oauth = False
+            st.stop()
+
+        auth = tweepy.OAuth1UserHandler(
+            st.secrets["X_CONSUMER_KEY"],
+            st.secrets["X_CONSUMER_SECRET"],
+            callback="https://xthreadmaster.streamlit.app"
         )
-        user = client.get_me(user_auth=False).data
-        st.session_state.x_username = user.username
-        st.success(f"Connected as @{user.username}")
-        st.query_params.clear()
-        st.rerun()
-    except Exception as e:
-        st.error(f"OAuth failed: {e}")
+        auth.request_token = {"oauth_token": oauth_token, "oauth_token_secret": req_secret}
+
+        try:
+            access = auth.get_access_token(verifier)
+            st.session_state.x_access_token = access[0]
+            st.session_state.x_access_secret = access[1]
+            st.session_state.x_logged_in = True
+
+            client = tweepy.Client(
+                consumer_key=st.secrets["X_CONSUMER_KEY"],
+                consumer_secret=st.secrets["X_CONSUMER_SECRET"],
+                access_token=access[0],
+                access_token_secret=access[1]
+            )
+            user = client.get_me(user_auth=False).data
+            st.session_state.x_username = user.username
+
+            # Clean up temporary state
+            st.session_state.pop("oauth_token_secret", None)
+            st.session_state.pop("processing_oauth", None)
+
+            # Clear query params and rerun
+            st.query_params.clear()
+            st.success(f"✅ Connected as @{user.username}")
+            st.rerun()
+        except Exception as e:
+            st.error(f"❌ OAuth failed: {e}")
+            st.session_state.processing_oauth = False
+            st.query_params.clear()
 
 # LOGIN BUTTON
-elif not st.session_state.get("x_logged_in"):
-    if st.button("Connect X Account (Pro)", use_container_width=True):
+if not st.session_state.get("x_logged_in"):
+    st.info("🔗 Connect your X account to enable auto-posting (Pro feature)")
+
+    if st.button("🚀 Connect X Account (Pro)", use_container_width=True):
         auth = tweepy.OAuth1UserHandler(
             st.secrets["X_CONSUMER_KEY"],
             st.secrets["X_CONSUMER_SECRET"],
@@ -110,15 +181,22 @@ elif not st.session_state.get("x_logged_in"):
         try:
             auth_url = auth.get_authorization_url(signin_with_twitter=True)
             rt = auth.request_token
+
+            # Store token secret in session state as backup
+            st.session_state.oauth_token_secret = rt["oauth_token_secret"]
+
+            # Also encode in state parameter for double redundancy
             state = urllib.parse.quote(json.dumps({
                 "token": rt["oauth_token"],
                 "secret": rt["oauth_token_secret"]
             }))
             final_url = f"{auth_url}&state={state}"
-            st.markdown(f"[**Authorize with X (new tab)**]({final_url})")
-            st.info("Approve → return here. Works every time.")
+
+            st.markdown(f"### [👉 Click here to authorize with X]({final_url})")
+            st.warning("⚠️ You will be redirected to X. After authorizing, you'll return here automatically.")
+            st.info("💡 **Important:** Make sure cookies are enabled in your browser for this to work!")
         except Exception as e:
-            st.error(f"Setup failed: {e}")
+            st.error(f"❌ Setup failed: {e}")
 
 # LOGGED IN
 else:
@@ -162,26 +240,52 @@ if "thread" in st.session_state:
     st.download_button("Download .txt", st.session_state.thread, "thread.txt")
 
     if pro and st.session_state.get("x_logged_in"):
-        if st.button("Auto-Post", use_container_width=True):
-            with st.spinner("Posting..."):
-                client = tweepy.Client(
-                    consumer_key=st.secrets["X_CONSUMER_KEY"],
-                    consumer_secret=st.secrets["X_CONSUMER_SECRET"],
-                    access_token=st.session_state.x_access_token,
-                    access_token_secret=st.session_state.x_access_secret,
-                )
-                tweets = [t for t in st.session_state.thread.split("\n") if t.strip()]
-                first = client.create_tweet(text=tweets[0])
-                tid = first.data["id"]
-                for t in tweets[1:]:
-                    resp = client.create_tweet(in_reply_to_tweet_id=tid, text=t)
-                    tid = resp.data["id"]
-                url = f"https://x.com/{st.session_state.x_username}/status/{first.data['id']}"
-                st.success(f"Posted! [View]({url})")
-                st.balloons()
+        if st.button("🚀 Auto-Post to X", use_container_width=True, type="primary"):
+            with st.spinner("Posting thread to X..."):
+                try:
+                    client = tweepy.Client(
+                        consumer_key=st.secrets["X_CONSUMER_KEY"],
+                        consumer_secret=st.secrets["X_CONSUMER_SECRET"],
+                        access_token=st.session_state.x_access_token,
+                        access_token_secret=st.session_state.x_access_secret,
+                    )
 
-    status = f"Ready! ({remaining} left)" if not pro else "Pro"
-    st.success(status)
+                    tweets = [t.strip() for t in st.session_state.thread.split("\n") if t.strip()]
+
+                    if not tweets:
+                        st.error("❌ No tweets to post!")
+                        st.stop()
+
+                    # Post first tweet
+                    first = client.create_tweet(text=tweets[0])
+                    tid = first.data["id"]
+                    posted_count = 1
+
+                    # Post remaining tweets as replies
+                    for t in tweets[1:]:
+                        try:
+                            resp = client.create_tweet(in_reply_to_tweet_id=tid, text=t)
+                            tid = resp.data["id"]
+                            posted_count += 1
+                        except Exception as e:
+                            st.warning(f"⚠️ Failed to post tweet {posted_count + 1}: {e}")
+                            break
+
+                    url = f"https://x.com/{st.session_state.x_username}/status/{first.data['id']}"
+                    st.success(f"✅ Posted {posted_count}/{len(tweets)} tweets! [View Thread]({url})")
+                    st.balloons()
+
+                except tweepy.errors.Unauthorized:
+                    st.error("❌ X authorization expired. Please reconnect your account.")
+                    st.session_state.x_logged_in = False
+                except tweepy.errors.Forbidden as e:
+                    st.error(f"❌ X API access forbidden: {e}")
+                except Exception as e:
+                    st.error(f"❌ Failed to post: {e}")
+
+    # Show remaining generations for free users
+    if not pro and "remaining" in st.session_state and st.session_state.remaining is not None:
+        st.info(f"📊 Free tier: {st.session_state.remaining} generations remaining today")
 
 st.markdown("---")
 st.caption("**Grok + Streamlit**")
