@@ -314,9 +314,9 @@ if pro:
                     st.session_state.pop(k, None)
                 st.rerun()
 
-        # Helpful note if email not entered
-        if not email or not email.strip():
-            st.info("😊 **You're connected!** Just re-enter your Pro email in Account Settings above to start posting!")
+# Show helpful message if X is connected but not showing as Pro (email missing)
+if st.session_state.get("x_logged_in") and (not email or not email.strip()):
+    st.info("😊 **You're connected to X!** Just re-enter your Pro email in Account Settings above to unlock all features!")
 
 # === GENERATE ===
 st.markdown("---")
