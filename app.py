@@ -12,7 +12,7 @@ from PIL import Image
 import base64
 
 # === CONFIG ===
-genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+# NOTE: genai.configure() is now called lazily in get_model() to prevent deployment hangs
 
 # Get Stripe payment link from secrets (with fallback)
 STRIPE_PAYMENT_LINK = st.secrets.get("STRIPE_PAYMENT_LINK", "#")
@@ -68,6 +68,9 @@ def cleanup_oauth_secret(oauth_token):
 # === MODEL ===
 @st.cache_resource
 def get_model():
+    # Configure genai API here (lazy loading to prevent deployment hang)
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+
     # Try models in order of preference
     for name in ("gemini-2.0-flash-exp", "gemini-1.5-flash", "gemini-1.5-pro"):
         try:
