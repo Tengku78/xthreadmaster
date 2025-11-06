@@ -521,6 +521,7 @@ Requirements:
             else:
                 # Generate images using Stability AI API
                 api_host = "https://api.stability.ai"
+                generation_errors = []
 
                 for i, slide_title in enumerate(slides, 1):
                     try:
@@ -560,12 +561,27 @@ Requirements:
                                     })
                                     break
                         else:
-                            st.warning(f"⚠️ Could not generate image for slide {i}: API returned {response.status_code}")
+                            error_detail = f"API returned {response.status_code}"
+                            try:
+                                error_body = response.json()
+                                if 'message' in error_body:
+                                    error_detail += f": {error_body['message']}"
+                            except:
+                                pass
+                            generation_errors.append(f"Slide {i}: {error_detail}")
                             continue
 
                     except Exception as e:
-                        st.warning(f"⚠️ Could not generate image for slide {i}: {str(e)}")
+                        generation_errors.append(f"Slide {i}: {str(e)}")
                         continue
+
+            # Show consolidated error messages after spinner closes
+            if generation_errors:
+                st.warning("⚠️ Some images failed to generate:")
+                for error in generation_errors[:3]:  # Show first 3 errors
+                    st.caption(f"• {error}")
+                if len(generation_errors) > 3:
+                    st.caption(f"• ... and {len(generation_errors) - 3} more errors")
 
             if not carousel_images:
                 st.warning("⚠️ No images were generated. Captions are still available below.")
