@@ -6,6 +6,10 @@ import json
 from datetime import date, datetime
 import os
 import tempfile
+import io
+import zipfile
+from PIL import Image
+import base64
 
 # === CONFIG ===
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
@@ -109,8 +113,9 @@ with st.sidebar:
     ### 🎨 Visual Pack ($17/mo)
     - ✅ Everything in Pro
     - 📸 Instagram carousel captions
-    - 🎨 Design guidance & templates
-    - 📥 Download captions as .txt
+    - 🖼️ AI-generated images (Stability AI)
+    - 📦 Download as ZIP
+    - 💯 100 carousels/month
 
     ---
 
@@ -122,6 +127,10 @@ if "gen_count" not in st.session_state:
     st.session_state.gen_count = 0
 if "last_reset" not in st.session_state:
     st.session_state.last_reset = date.today()
+if "carousel_count" not in st.session_state:
+    st.session_state.carousel_count = 0
+if "carousel_last_reset" not in st.session_state:
+    st.session_state.carousel_last_reset = date.today()
 if "x_logged_in" not in st.session_state:
     st.session_state.x_logged_in = False
 if "thread" not in st.session_state:
@@ -156,6 +165,13 @@ with st.expander("⚙️ Account Settings", expanded=False):
 if st.session_state.last_reset != date.today():
     st.session_state.gen_count = 0
     st.session_state.last_reset = date.today()
+
+# Reset carousel count monthly (first day of month)
+current_month = date.today().replace(day=1)
+last_reset_month = st.session_state.carousel_last_reset.replace(day=1)
+if current_month != last_reset_month:
+    st.session_state.carousel_count = 0
+    st.session_state.carousel_last_reset = date.today()
 
 # === SUBSCRIPTION TIERS ===
 def get_user_tier(e):
@@ -267,10 +283,11 @@ if pro:
 # Show subscription status
 if email and email.strip():
     if visual_pack:
-        st.success("✅ **Visual Pack Active** - X threads + Instagram carousels with AI images")
+        remaining_carousels = 100 - st.session_state.carousel_count
+        st.success(f"✅ **Visual Pack Active** - X threads + Instagram carousels with AI images ({remaining_carousels}/100 carousels remaining this month)")
     elif pro:
         st.success("✅ **Pro Account Active** - Unlimited X threads & auto-posting")
-        st.info("💎 Upgrade to Visual Pack ($17/mo) to unlock Instagram carousels with AI images")
+        st.info("💎 Upgrade to Visual Pack ($17/mo) to unlock Instagram carousels with AI-generated images")
     else:
         remaining_today = 3 - st.session_state.gen_count
         st.info(f"🆓 **Free Tier** - {remaining_today} generations remaining today | [Upgrade to Pro]({STRIPE_PAYMENT_LINK}) for unlimited access")
@@ -436,6 +453,13 @@ Requirements:
         st.session_state.remaining = remaining
 
     else:  # Instagram Carousel
+        # Check carousel monthly limit (100/month soft cap)
+        if st.session_state.carousel_count >= 100:
+            st.error("🚫 Monthly carousel limit reached: 100 carousels per month")
+            st.info("You've hit the soft cap for this month. This limit resets on the 1st of next month.")
+            st.warning("💡 Need more? Contact support for enterprise pricing.")
+            st.stop()
+
         # Generate Instagram Carousel
         with st.spinner("🎨 Generating your Instagram carousel..."):
             prompt = f"""Create a VIRAL Instagram carousel about: "{topic}"
@@ -469,12 +493,81 @@ Requirements:
                     st.error(f"❌ AI generation failed: {error_msg}")
                 st.stop()
 
-        # NOTE: Image generation temporarily disabled
-        # Gemini 2.0 doesn't support direct image generation yet
-        # Future: Integrate with DALL-E, Midjourney, or Stability AI
+        # Generate AI images with Stability AI
+        with st.spinner(f"🖼️ Generating {length} AI images for your carousel..."):
+            carousel_images = []
+
+            # Parse carousel to extract slide titles
+            slides = []
+            for line in carousel.split('\n'):
+                if line.strip().startswith('SLIDE'):
+                    if ':' in line:
+                        title = line.split(':', 1)[1].strip()
+                        slides.append(title)
+
+            # Stability AI configuration
+            stability_api_key = st.secrets.get("STABILITY_API_KEY", "")
+
+            if not stability_api_key:
+                st.warning("⚠️ Stability AI API key not configured. Images will not be generated.")
+                st.info("Add STABILITY_API_KEY to your secrets to enable AI image generation.")
+            else:
+                # Generate images using Stability AI API
+                api_host = "https://api.stability.ai"
+
+                for i, slide_title in enumerate(slides, 1):
+                    try:
+                        # Create image prompt
+                        img_prompt = f"Professional Instagram carousel image: {slide_title}. Topic: {topic}. Style: modern, clean, vibrant, social media optimized, no text overlay"
+
+                        # Call Stability AI API
+                        response = requests.post(
+                            f"{api_host}/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image",
+                            headers={
+                                "Content-Type": "application/json",
+                                "Accept": "application/json",
+                                "Authorization": f"Bearer {stability_api_key}"
+                            },
+                            json={
+                                "text_prompts": [{"text": img_prompt}],
+                                "cfg_scale": 7,
+                                "height": 1024,
+                                "width": 1024,
+                                "samples": 1,
+                                "steps": 30,
+                            },
+                            timeout=60
+                        )
+
+                        if response.status_code == 200:
+                            data = response.json()
+                            for artifact in data.get("artifacts", []):
+                                if artifact.get("finishReason") == "SUCCESS":
+                                    img_base64 = artifact.get("base64")
+                                    img_bytes = base64.b64decode(img_base64)
+
+                                    carousel_images.append({
+                                        'data': img_bytes,
+                                        'slide_num': i,
+                                        'title': slide_title
+                                    })
+                                    break
+                        else:
+                            st.warning(f"⚠️ Could not generate image for slide {i}: API returned {response.status_code}")
+                            continue
+
+                    except Exception as e:
+                        st.warning(f"⚠️ Could not generate image for slide {i}: {str(e)}")
+                        continue
+
+            if not carousel_images:
+                st.warning("⚠️ No images were generated. Captions are still available below.")
+
+        # Increment carousel count
+        st.session_state.carousel_count += 1
 
         st.session_state.carousel = carousel
-        st.session_state.carousel_images = []  # Empty for now
+        st.session_state.carousel_images = carousel_images
         st.session_state.platform = "Instagram Carousel"
 
     # Save to history (Pro users only, keep last 10)
@@ -603,6 +696,18 @@ if "carousel" in st.session_state and st.session_state.carousel and st.session_s
     st.markdown("### 📝 Carousel Captions")
     st.code(st.session_state.carousel, language="text")
 
+    # Display generated images if available
+    if st.session_state.carousel_images:
+        st.markdown("### 🖼️ AI-Generated Images")
+
+        for img_data in st.session_state.carousel_images:
+            st.markdown(f"**Slide {img_data['slide_num']}: {img_data['title']}**")
+
+            # Convert bytes to image and display
+            img = Image.open(io.BytesIO(img_data['data']))
+            st.image(img, use_container_width=True)
+            st.markdown("---")
+
     # Action buttons
     col1, col2 = st.columns(2)
 
@@ -618,33 +723,62 @@ if "carousel" in st.session_state and st.session_state.carousel and st.session_s
         )
 
     with col2:
-        st.info("🎨 Use [Canva](https://canva.com) or [Adobe Express](https://express.adobe.com) to create images")
+        if st.session_state.carousel_images:
+            # Download ZIP with images and captions
+            if st.button("📦 Download ZIP (Images + Captions)", use_container_width=True, type="primary"):
+                with st.spinner("📦 Preparing your carousel package..."):
+                    # Create ZIP file in memory
+                    zip_buffer = io.BytesIO()
 
-    # Image generation info
+                    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                        # Add captions file
+                        zip_file.writestr("captions.txt", st.session_state.carousel)
+
+                        # Add images
+                        for img_data in st.session_state.carousel_images:
+                            img_filename = f"slide_{img_data['slide_num']:02d}.png"
+                            zip_file.writestr(img_filename, img_data['data'])
+
+                    zip_buffer.seek(0)
+
+                    st.download_button(
+                        "✅ Click to Download ZIP",
+                        zip_buffer,
+                        "instagram_carousel.zip",
+                        mime="application/zip",
+                        use_container_width=True
+                    )
+                    st.success("✅ Carousel package ready!")
+        else:
+            st.info("🎨 Images not generated - use tools below to create them")
+
+    # Usage stats
+    remaining = 100 - st.session_state.carousel_count
+    st.divider()
+    st.info(f"📊 **Carousel Usage:** {st.session_state.carousel_count}/100 this month • {remaining} remaining")
+
+    # Next steps
     st.markdown("---")
-    st.markdown("### 🖼️ Creating Images for Your Carousel")
+    st.markdown("### 💡 Next Steps")
 
-    st.info("""
-    **How to create stunning carousel images:**
+    if st.session_state.carousel_images:
+        st.success("""
+        **Your carousel is ready!**
+        1. Download the ZIP file above
+        2. Upload images to Instagram in order (slide_01.png, slide_02.png, etc.)
+        3. Copy-paste the captions from the txt file
+        4. Post and watch the engagement roll in! 🚀
+        """)
+    else:
+        st.info("""
+        **Create images for your carousel:**
 
-    1. **Use Design Tools:**
-       - [Canva](https://canva.com) - Free templates for Instagram carousels
-       - [Adobe Express](https://express.adobe.com) - Professional designs
-       - [Figma](https://figma.com) - Custom designs
+        - [Canva](https://canva.com) - Free templates for Instagram carousels
+        - [Adobe Express](https://express.adobe.com) - Professional designs
+        - [Leonardo.ai](https://leonardo.ai) - Free AI image generation
 
-    2. **Use AI Image Generators:**
-       - [Midjourney](https://midjourney.com) - High-quality AI images ($10/mo)
-       - [DALL-E](https://openai.com/dall-e) - OpenAI's image generator
-       - [Leonardo.ai](https://leonardo.ai) - Free tier available
-
-    3. **Instagram Carousel Requirements:**
-       - Format: JPEG or PNG
-       - Minimum size: 1080px width
-       - Aspect ratio: 1:1 (square) or 4:5 (portrait)
-       - Maximum: 10 images per carousel
-
-    💡 **Pro Tip:** Copy each slide's caption and paste it as a prompt into your chosen AI image generator!
-    """)
+        💡 **Tip:** Copy each slide caption and use it as a prompt in your image generator!
+        """)
 
 st.markdown("---")
 st.caption(f"Made with ❤️ using Gemini AI • [Upgrade to Pro]({STRIPE_PAYMENT_LINK})")

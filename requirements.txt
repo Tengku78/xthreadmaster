@@ -2,3 +2,5 @@ streamlit
 google-generativeai
 requests
 tweepy
+stability-sdk
+Pillow
