@@ -69,13 +69,11 @@ def cleanup_oauth_secret(oauth_token):
 @st.cache_resource
 def get_model():
     # Try models in order of preference
-    for name in ("gemini-2.0-flash-exp", "gemini-2.5-flash", "gemini-2.5-pro"):
+    for name in ("gemini-2.0-flash-exp", "gemini-1.5-flash", "gemini-1.5-pro"):
         try:
             m = genai.GenerativeModel(name)
-            # Test the model
-            test_response = m.generate_content("hi")
-            if test_response and test_response.text:
-                return m
+            # Quick validation without API call
+            return m
         except Exception:
             continue
 
@@ -83,7 +81,11 @@ def get_model():
     st.error("❌ AI service unavailable. Please contact support or try again later.")
     st.stop()
 
-model = get_model()
+# Lazy load model - only initialized when first used
+def get_or_create_model():
+    if "model" not in st.session_state:
+        st.session_state.model = get_model()
+    return st.session_state.model
 
 st.set_page_config(page_title="XThreadMaster", page_icon="🚀", layout="centered")
 
@@ -432,6 +434,7 @@ Requirements:
 - Format: ONE TWEET PER LINE"""
 
             try:
+                model = get_or_create_model()
                 thread = model.generate_content(prompt).text.strip()
             except Exception as e:
                 error_msg = str(e)
@@ -477,6 +480,7 @@ Requirements:
   One slide per section."""
 
             try:
+                model = get_or_create_model()
                 carousel = model.generate_content(prompt).text.strip()
             except Exception as e:
                 error_msg = str(e)
