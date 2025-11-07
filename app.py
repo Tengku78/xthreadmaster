@@ -660,7 +660,74 @@ if email and email.strip():
 # === OAUTH: STATE PARAMETER (NO SESSION LOSS) ===
 query = st.query_params
 
-# CALLBACK - Handle OAuth return
+# LINKEDIN CALLBACK - Handle OAuth 2.0 return
+if "code" in query and "state" in query:
+    # LinkedIn uses OAuth 2.0 (different from X's OAuth 1.0a)
+    if not st.session_state.get("processing_linkedin_oauth"):
+        st.session_state.processing_linkedin_oauth = True
+
+        code = query["code"]
+        state = query["state"]
+
+        # Verify state to prevent CSRF
+        if state != st.session_state.get("linkedin_oauth_state"):
+            st.error("❌ Invalid OAuth state. Please try again.")
+            st.query_params.clear()
+            st.session_state.processing_linkedin_oauth = False
+            st.stop()
+
+        # Exchange code for access token
+        try:
+            token_response = requests.post(
+                "https://www.linkedin.com/oauth/v2/accessToken",
+                data={
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "redirect_uri": "https://xthreadmaster.streamlit.app/",
+                    "client_id": st.secrets["LINKEDIN_CLIENT_ID"],
+                    "client_secret": st.secrets["LINKEDIN_CLIENT_SECRET"]
+                },
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                timeout=10
+            )
+
+            token_data = token_response.json()
+
+            if "access_token" in token_data:
+                st.session_state.linkedin_access_token = token_data["access_token"]
+                st.session_state.linkedin_logged_in = True
+
+                # Get user info (person ID) for posting
+                user_response = requests.get(
+                    "https://api.linkedin.com/v2/userinfo",
+                    headers={"Authorization": f"Bearer {token_data['access_token']}"},
+                    timeout=10
+                )
+
+                if user_response.status_code == 200:
+                    user_data = user_response.json()
+                    st.session_state.linkedin_person_id = user_data.get("sub")
+                    st.session_state.linkedin_name = user_data.get("name", "Unknown")
+
+                # Clean up
+                st.session_state.pop("processing_linkedin_oauth", None)
+                st.session_state.pop("linkedin_oauth_state", None)
+
+                # Clear query params and rerun
+                st.query_params.clear()
+                st.success(f"✅ Connected to LinkedIn as {st.session_state.get('linkedin_name', 'User')}")
+                st.rerun()
+            else:
+                st.error(f"❌ LinkedIn OAuth failed: {token_data.get('error_description', 'Unknown error')}")
+                st.session_state.processing_linkedin_oauth = False
+                st.query_params.clear()
+
+        except Exception as e:
+            st.error(f"❌ LinkedIn connection failed: {e}")
+            st.session_state.processing_linkedin_oauth = False
+            st.query_params.clear()
+
+# X CALLBACK - Handle OAuth return
 if "oauth_verifier" in query and "oauth_token" in query:
     if not st.session_state.get("processing_oauth"):
         st.session_state.processing_oauth = True
@@ -754,6 +821,47 @@ if pro:
         with col2:
             if st.button("Disconnect", use_container_width=True):
                 for k in ["x_access_token", "x_access_secret", "x_username", "x_logged_in"]:
+                    st.session_state.pop(k, None)
+                st.rerun()
+
+    # === LINKEDIN ACCOUNT CONNECTION (PRO) ===
+    st.markdown("---")
+    st.subheader("💼 LinkedIn Account Connection")
+
+    if not st.session_state.get("linkedin_logged_in"):
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.write("Connect your LinkedIn account to enable one-click auto-posting")
+        with col2:
+            if st.button("Connect LinkedIn Account", use_container_width=True, type="secondary"):
+                import secrets
+
+                # Generate random state for CSRF protection
+                oauth_state = secrets.token_urlsafe(32)
+                st.session_state.linkedin_oauth_state = oauth_state
+
+                # LinkedIn OAuth 2.0 authorization URL
+                linkedin_auth_url = (
+                    f"https://www.linkedin.com/oauth/v2/authorization"
+                    f"?response_type=code"
+                    f"&client_id={st.secrets['LINKEDIN_CLIENT_ID']}"
+                    f"&redirect_uri=https://xthreadmaster.streamlit.app/"
+                    f"&state={oauth_state}"
+                    f"&scope=openid profile email w_member_social"
+                )
+
+                st.markdown(f"### [👉 Click here to authorize with LinkedIn]({linkedin_auth_url})")
+                st.info("💡 You'll be redirected to LinkedIn. After authorizing, you'll return automatically.")
+
+    # LOGGED IN
+    else:
+        col1, col2 = st.columns([2, 1])
+        linkedin_name = st.session_state.get("linkedin_name", "Unknown")
+        with col1:
+            st.success(f"✅ Connected as {linkedin_name}")
+        with col2:
+            if st.button("Disconnect LinkedIn", use_container_width=True):
+                for k in ["linkedin_access_token", "linkedin_person_id", "linkedin_name", "linkedin_logged_in"]:
                     st.session_state.pop(k, None)
                 st.rerun()
 
@@ -1315,8 +1423,75 @@ if "thread" in st.session_state and st.session_state.thread:
             else:
                 st.info("💎 Upgrade to Pro to enable auto-posting")
         elif st.session_state.get("platform") == "LinkedIn Post":
-            # LinkedIn: Just show helpful message (OAuth not implemented yet)
-            st.info("💡 Copy your post and paste it on LinkedIn")
+            # LinkedIn auto-posting (Pro only)
+            if pro and st.session_state.get("linkedin_logged_in"):
+                if st.button("🚀 Post to LinkedIn", use_container_width=True, type="primary"):
+                    with st.spinner("📤 Posting to LinkedIn..."):
+                        try:
+                            # Get the LinkedIn post content (remove the footer for LinkedIn)
+                            linkedin_content = st.session_state.get("linkedin_post", "")
+
+                            if not linkedin_content or not linkedin_content.strip():
+                                st.error("❌ No content to post!")
+                                st.stop()
+
+                            # LinkedIn API v2 - Create UGC Post
+                            # Documentation: https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/ugc-post-api
+
+                            post_data = {
+                                "author": f"urn:li:person:{st.session_state.linkedin_person_id}",
+                                "lifecycleState": "PUBLISHED",
+                                "specificContent": {
+                                    "com.linkedin.ugc.ShareContent": {
+                                        "shareCommentary": {
+                                            "text": linkedin_content
+                                        },
+                                        "shareMediaCategory": "NONE"
+                                    }
+                                },
+                                "visibility": {
+                                    "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"
+                                }
+                            }
+
+                            response = requests.post(
+                                "https://api.linkedin.com/v2/ugcPosts",
+                                headers={
+                                    "Authorization": f"Bearer {st.session_state.linkedin_access_token}",
+                                    "Content-Type": "application/json",
+                                    "X-Restli-Protocol-Version": "2.0.0"
+                                },
+                                json=post_data,
+                                timeout=10
+                            )
+
+                            if response.status_code == 201:
+                                post_id = response.json().get("id", "")
+                                st.success(f"✅ Successfully posted to LinkedIn!")
+
+                                # LinkedIn doesn't provide direct post URLs in API response
+                                # Show success message instead
+                                st.markdown("### [🔗 View on LinkedIn](https://www.linkedin.com/feed/)")
+                                st.info("💡 Your post is now live! Check your LinkedIn profile to see it.")
+
+                                st.balloons()
+                            else:
+                                error_msg = response.json().get("message", "Unknown error")
+                                st.error(f"❌ Failed to post to LinkedIn: {error_msg}")
+
+                                # If unauthorized, prompt to reconnect
+                                if response.status_code == 401:
+                                    st.session_state.linkedin_logged_in = False
+                                    st.info("🔗 Please reconnect your LinkedIn account above.")
+
+                        except requests.exceptions.Timeout:
+                            st.error("❌ Request timed out. Please try again.")
+                        except Exception as e:
+                            st.error(f"❌ Failed to post: {e}")
+            elif pro and not st.session_state.get("linkedin_logged_in"):
+                st.info("🔗 Connect your LinkedIn account above to enable auto-posting")
+            else:
+                st.info("💎 Upgrade to Pro to enable auto-posting")
         else:
             # Fallback for any other platform
             pass
