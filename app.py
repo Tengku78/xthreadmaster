@@ -655,9 +655,15 @@ if "thread" in st.session_state and st.session_state.thread:
     col1, col2, col3 = st.columns(3)
 
     with col1:
+        # Add viral footer for free users
+        if not pro:
+            thread_with_footer = st.session_state.thread + "\n\n---\n📝 Generated with XThreadMaster - Create viral content with AI\n🚀 Get your free account: https://xthreadmaster.streamlit.app"
+        else:
+            thread_with_footer = st.session_state.thread
+
         st.download_button(
             "📥 Download",
-            st.session_state.thread,
+            thread_with_footer,
             "xthread.txt",
             mime="text/plain",
             use_container_width=True,
@@ -750,10 +756,16 @@ if "carousel" in st.session_state and st.session_state.carousel and st.session_s
     col1, col2 = st.columns(2)
 
     with col1:
+        # Add viral footer for free/pro users (Visual Pack gets clean export)
+        if not visual_pack:
+            carousel_with_footer = st.session_state.carousel + "\n\n---\n🎨 Generated with XThreadMaster - Create viral content with AI\n🚀 Get Pro for unlimited threads: https://xthreadmaster.streamlit.app"
+        else:
+            carousel_with_footer = st.session_state.carousel
+
         # Download captions as text
         st.download_button(
             "📥 Download Captions",
-            st.session_state.carousel,
+            carousel_with_footer,
             "carousel_captions.txt",
             mime="text/plain",
             use_container_width=True,
@@ -769,8 +781,9 @@ if "carousel" in st.session_state and st.session_state.carousel and st.session_s
                     zip_buffer = io.BytesIO()
 
                     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                        # Add captions file
-                        zip_file.writestr("captions.txt", st.session_state.carousel)
+                        # Add captions file (with footer for non-Visual Pack users)
+                        captions_content = carousel_with_footer if not visual_pack else st.session_state.carousel
+                        zip_file.writestr("captions.txt", captions_content)
 
                         # Add images
                         for img_data in st.session_state.carousel_images:
