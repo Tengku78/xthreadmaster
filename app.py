@@ -1052,9 +1052,19 @@ if "code" in query and "state" in query:
         code = query["code"]
         state = query["state"]
 
-        # Verify state to prevent CSRF
-        if state != st.session_state.get("linkedin_oauth_state"):
-            st.error("❌ Invalid OAuth state. Please try again.")
+        # Verify state to prevent CSRF (read from temp file storage)
+        try:
+            state_file = os.path.join(tempfile.gettempdir(), f"linkedin_oauth_state_{state}.txt")
+            if not os.path.exists(state_file):
+                st.error("❌ Invalid OAuth state. Please try again.")
+                st.query_params.clear()
+                st.session_state.processing_linkedin_oauth = False
+                st.stop()
+
+            # State file exists, we're good - delete it
+            os.remove(state_file)
+        except Exception as e:
+            st.error(f"❌ OAuth state verification failed: {e}")
             st.query_params.clear()
             st.session_state.processing_linkedin_oauth = False
             st.stop()
@@ -1094,7 +1104,6 @@ if "code" in query and "state" in query:
 
                 # Clean up
                 st.session_state.pop("processing_linkedin_oauth", None)
-                st.session_state.pop("linkedin_oauth_state", None)
 
                 # Clear query params and rerun
                 st.query_params.clear()
@@ -1230,7 +1239,15 @@ if pro:
 
                 # Generate random state for CSRF protection
                 oauth_state = secrets.token_urlsafe(32)
-                st.session_state.linkedin_oauth_state = oauth_state
+
+                # Store state in temp file (persists across page reloads)
+                try:
+                    state_file = os.path.join(tempfile.gettempdir(), f"linkedin_oauth_state_{oauth_state}.txt")
+                    with open(state_file, "w") as f:
+                        f.write(oauth_state)
+                except Exception as e:
+                    st.error(f"❌ Failed to initialize OAuth: {e}")
+                    st.stop()
 
                 # LinkedIn OAuth 2.0 authorization URL with proper encoding
                 params = {
