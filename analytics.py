@@ -10,7 +10,9 @@ from typing import Dict, List, Optional
 import hashlib
 
 # Analytics data directory
-ANALYTICS_DIR = "analytics_data"
+# Use /tmp on Streamlit Cloud (ephemeral but writable)
+# Use local directory for development
+ANALYTICS_DIR = os.getenv("STREAMLIT_CLOUD_ENV") and "/tmp/analytics_data" or "analytics_data"
 
 def ensure_analytics_dir():
     """Ensure analytics data directory exists"""
