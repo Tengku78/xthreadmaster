@@ -27,3 +27,6 @@ Thumbs.db
 # Temporary files
 *.log
 .cache/
+
+# Analytics data (user privacy)
+analytics_data/

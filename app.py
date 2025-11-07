@@ -10,6 +10,7 @@ import io
 import zipfile
 from PIL import Image
 import base64
+import pandas as pd
 from templates import (
     get_all_templates,
     get_free_templates,
@@ -18,6 +19,7 @@ from templates import (
     get_template_by_id,
     fill_template
 )
+from analytics import track_generation, get_analytics_summary, get_daily_activity_chart_data
 
 # === CONFIG ===
 # NOTE: genai.configure() is now called lazily in get_model() to prevent deployment hangs
@@ -154,45 +156,7 @@ def get_or_create_model():
 st.set_page_config(page_title="XThreadMaster", page_icon="🚀", layout="centered")
 
 # === SIDEBAR ===
-with st.sidebar:
-    st.title("ℹ️ About")
-    st.markdown("""
-    **XThreadMaster** generates viral content for X & Instagram using AI.
-
-    ### ✨ Features
-    - 🤖 AI-powered content generation
-    - 📚 Pre-written templates library
-    - 🎨 Multiple tone options
-    - 📥 Download content
-    - 🚀 Auto-post to X (Pro+)
-
-    ### 🆓 Free Tier
-    - 3 X threads per day
-    - 5 content templates
-    - Manual posting
-
-    ### 💎 Pro ($12/mo)
-    - ♾️ Unlimited X threads
-    - 💼 LinkedIn posts (B2B content)
-    - 📚 15+ content templates (all categories)
-    - 🚀 One-click auto-posting to X
-    - 🔗 X account integration
-    - ✏️ Edit before posting
-    - 📚 Thread history (last 10)
-
-    ### 🎨 Visual Pack ($17/mo)
-    - ✅ Everything in Pro
-    - 📸 Instagram carousel captions
-    - 🖼️ AI-generated images (Stability AI)
-    - 📦 Download as ZIP
-    - 💯 100 carousels/month
-
-    ---
-
-    [Upgrade to Pro ($12/mo)]({STRIPE_PRO_LINK})
-
-    [Upgrade to Visual Pack ($17/mo)]({STRIPE_VISUAL_PACK_LINK})
-    """.replace("{STRIPE_PRO_LINK}", STRIPE_PRO_LINK).replace("{STRIPE_VISUAL_PACK_LINK}", STRIPE_VISUAL_PACK_LINK))
+# Note: Sidebar content is rendered after user_tier is determined (see below after line 400)
 
 # === INITIALIZE SESSION STATE ===
 if "gen_count" not in st.session_state:
@@ -308,6 +272,145 @@ if email == "testtest@gmail.com":
 
 pro = user_tier in ['pro', 'visual_pack']
 visual_pack = user_tier == 'visual_pack'
+
+# === RENDER SIDEBAR ===
+with st.sidebar:
+    # Add Analytics Dashboard tab for Pro users
+    if pro and email and email.strip():
+        sidebar_tab = st.radio(
+            "Navigation",
+            ["📊 Analytics", "ℹ️ About"],
+            label_visibility="collapsed"
+        )
+    else:
+        sidebar_tab = "ℹ️ About"
+
+    if sidebar_tab == "📊 Analytics" and pro and email and email.strip():
+        st.title("📊 Analytics Dashboard")
+
+        # Load analytics summary
+        analytics = get_analytics_summary(email)
+
+        if analytics and analytics["total_generations"] > 0:
+            # Key Metrics
+            st.metric("Total Content", analytics["total_generations"])
+
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Avg/Day", analytics["avg_per_day"])
+            with col2:
+                # Calculate this week's activity
+                recent_activity = analytics["recent_activity"]
+                this_week = sum(recent_activity.values())
+                st.metric("This Week", this_week)
+
+            st.markdown("---")
+
+            # Platform Breakdown
+            st.markdown("**🎯 Platform Usage**")
+            platform_data = analytics["platform_breakdown"]
+            for platform_name, count in platform_data.items():
+                if count > 0:
+                    percentage = (count / analytics["total_generations"]) * 100
+                    st.progress(percentage / 100)
+                    st.caption(f"{platform_name}: {count} ({percentage:.0f}%)")
+
+            st.markdown("---")
+
+            # Tone Breakdown
+            st.markdown("**🎨 Tone Preferences**")
+            tone_data = analytics["tone_breakdown"]
+            if tone_data:
+                top_3_tones = sorted(tone_data.items(), key=lambda x: x[1], reverse=True)[:3]
+                for tone_name, count in top_3_tones:
+                    st.caption(f"• {tone_name}: {count}x")
+
+            st.markdown("---")
+
+            # Template Usage
+            st.markdown("**📚 Template Usage**")
+            if analytics["most_used_template"]:
+                st.caption(f"**Most Used:** {analytics['most_used_template']['name']}")
+                st.caption(f"Used {analytics['most_used_template']['count']}x")
+            else:
+                st.caption("No templates used yet")
+
+            st.markdown("---")
+
+            # Activity Chart (Last 30 days)
+            st.markdown("**📈 Activity Trend (30 Days)**")
+            chart_data = get_daily_activity_chart_data(email, days=30)
+            if chart_data and any(d["count"] > 0 for d in chart_data):
+                df = pd.DataFrame(chart_data)
+                df['date'] = pd.to_datetime(df['date'])
+                st.line_chart(df.set_index('date')['count'], use_container_width=True)
+            else:
+                st.caption("No activity data yet")
+
+            st.markdown("---")
+
+            # Recent Activity
+            st.markdown("**⏱️ Recent Activity**")
+            recent_history = analytics["recent_history"][:5]
+            if recent_history:
+                for entry in recent_history:
+                    timestamp = datetime.fromisoformat(entry["timestamp"])
+                    time_str = timestamp.strftime("%b %d, %I:%M %p")
+                    platform_emoji = {"X Thread": "🐦", "LinkedIn Post": "💼", "Instagram Carousel": "📸"}.get(entry["platform"], "📝")
+                    st.caption(f"{platform_emoji} {time_str}")
+                    st.caption(f"   {entry['topic'][:40]}...")
+            else:
+                st.caption("No recent activity")
+
+        else:
+            st.info("📊 Generate content to see your analytics here!")
+            st.caption("Your analytics will show:")
+            st.caption("• Total content generated")
+            st.caption("• Platform breakdown")
+            st.caption("• Most used templates")
+            st.caption("• Activity trends")
+
+    else:
+        # About section (original)
+        st.title("ℹ️ About")
+        st.markdown("""
+        **XThreadMaster** generates viral content for X & Instagram using AI.
+
+        ### ✨ Features
+        - 🤖 AI-powered content generation
+        - 📚 Pre-written templates library
+        - 🎨 Multiple tone options
+        - 📥 Download content
+        - 🚀 Auto-post to X (Pro+)
+
+        ### 🆓 Free Tier
+        - 3 X threads per day
+        - 5 content templates
+        - Manual posting
+
+        ### 💎 Pro ($12/mo)
+        - ♾️ Unlimited X threads
+        - 💼 LinkedIn posts (B2B content)
+        - 📚 15+ content templates (all categories)
+        - 🚀 One-click auto-posting to X
+        - 🔗 X account integration
+        - ✏️ Edit before posting
+        - 📚 Thread history (last 10)
+        - 📊 Analytics dashboard
+
+        ### 🎨 Visual Pack ($17/mo)
+        - ✅ Everything in Pro
+        - 📸 Instagram carousel captions
+        - 🖼️ AI-generated images (Stability AI)
+        - 📦 Download as ZIP
+        - 💯 100 carousels/month
+
+        ---
+
+        [Upgrade to Pro ($12/mo)]({STRIPE_PRO_LINK})
+
+        [Upgrade to Visual Pack ($17/mo)]({STRIPE_VISUAL_PACK_LINK})
+        """.replace("{STRIPE_PRO_LINK}", STRIPE_PRO_LINK).replace("{STRIPE_VISUAL_PACK_LINK}", STRIPE_VISUAL_PACK_LINK))
 
 # === CONTENT SETTINGS ===
 st.subheader("📝 Content Settings")
@@ -670,6 +773,25 @@ Requirements:
         st.session_state.platform = "X Thread"
         st.session_state.remaining = remaining
 
+        # Track analytics (Pro users only)
+        if pro and email and email.strip():
+            template_name = None
+            template_id = None
+            if template_mode:
+                template_obj = st.session_state.selected_template
+                template_name = template_obj["title"]
+                template_id = template_obj["id"]
+
+            track_generation(
+                email=email,
+                platform="X Thread",
+                tone=tone,
+                length=length,
+                topic=topic if topic else "Template-based",
+                template_used=template_name,
+                template_id=template_id
+            )
+
     elif platform == "LinkedIn Post":
         # Generate LinkedIn Post (Pro feature)
         with st.spinner("💼 Generating your professional LinkedIn post..."):
@@ -739,6 +861,25 @@ Requirements:
 
         st.session_state.thread = linkedin_post
         st.session_state.platform = "LinkedIn Post"
+
+        # Track analytics (Pro users only)
+        if pro and email and email.strip():
+            template_name = None
+            template_id = None
+            if template_mode:
+                template_obj = st.session_state.selected_template
+                template_name = template_obj["title"]
+                template_id = template_obj["id"]
+
+            track_generation(
+                email=email,
+                platform="LinkedIn Post",
+                tone=tone,
+                length=None,  # LinkedIn posts don't have length
+                topic=topic if topic else "Template-based",
+                template_used=template_name,
+                template_id=template_id
+            )
 
     else:  # Instagram Carousel
         # Check carousel monthly limit (100/month soft cap)
@@ -918,6 +1059,25 @@ Requirements:
         st.session_state.carousel = carousel
         st.session_state.carousel_images = carousel_images
         st.session_state.platform = "Instagram Carousel"
+
+        # Track analytics (Pro users only)
+        if pro and email and email.strip():
+            template_name = None
+            template_id = None
+            if template_mode:
+                template_obj = st.session_state.selected_template
+                template_name = template_obj["title"]
+                template_id = template_obj["id"]
+
+            track_generation(
+                email=email,
+                platform="Instagram Carousel",
+                tone=tone,
+                length=length,
+                topic=topic if topic else "Template-based",
+                template_used=template_name,
+                template_id=template_id
+            )
 
     # Save to history (Pro users only, keep last 10)
     if pro:
