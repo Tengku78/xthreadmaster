@@ -1226,20 +1226,21 @@ if pro:
         with col2:
             if st.button("Connect LinkedIn Account", use_container_width=True, type="secondary"):
                 import secrets
+                from urllib.parse import urlencode
 
                 # Generate random state for CSRF protection
                 oauth_state = secrets.token_urlsafe(32)
                 st.session_state.linkedin_oauth_state = oauth_state
 
-                # LinkedIn OAuth 2.0 authorization URL
-                linkedin_auth_url = (
-                    f"https://www.linkedin.com/oauth/v2/authorization"
-                    f"?response_type=code"
-                    f"&client_id={st.secrets['LINKEDIN_CLIENT_ID']}"
-                    f"&redirect_uri=https://xthreadmaster.streamlit.app/"
-                    f"&state={oauth_state}"
-                    f"&scope=openid profile email w_member_social"
-                )
+                # LinkedIn OAuth 2.0 authorization URL with proper encoding
+                params = {
+                    "response_type": "code",
+                    "client_id": st.secrets['LINKEDIN_CLIENT_ID'],
+                    "redirect_uri": "https://xthreadmaster.streamlit.app/",
+                    "state": oauth_state,
+                    "scope": "openid profile email w_member_social"
+                }
+                linkedin_auth_url = f"https://www.linkedin.com/oauth/v2/authorization?{urlencode(params)}"
 
                 st.markdown(f"### [👉 Click here to authorize with LinkedIn]({linkedin_auth_url})")
                 st.info("💡 You'll be redirected to LinkedIn. After authorizing, you'll return automatically.")
