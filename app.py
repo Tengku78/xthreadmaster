@@ -632,6 +632,114 @@ if email == "testtest@gmail.com":
 pro = user_tier in ['pro', 'visual_pack']
 visual_pack = user_tier == 'visual_pack'
 
+# === OAUTH CONNECTIONS (Pro Only) ===
+if pro:
+    st.markdown("---")
+
+    # X Account Connection
+    st.subheader("🔗 X Account Connection")
+
+    if not st.session_state.get("x_logged_in"):
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.write("Connect your X account to enable one-click auto-posting")
+        with col2:
+            if st.button("Connect X Account", use_container_width=True, type="secondary"):
+                auth = tweepy.OAuth1UserHandler(
+                    st.secrets["X_CONSUMER_KEY"],
+                    st.secrets["X_CONSUMER_SECRET"],
+                    callback="https://xthreadmaster.streamlit.app"
+                )
+                try:
+                    auth_url = auth.get_authorization_url(signin_with_twitter=True)
+                    rt = auth.request_token
+
+                    # Store token secret in temporary file storage (survives redirect)
+                    save_oauth_secret(rt["oauth_token"], rt["oauth_token_secret"])
+
+                    st.markdown(f"### [👉 Click here to authorize with X]({auth_url})")
+                    st.info("💡 You'll be redirected to X. After authorizing, you'll return automatically (within 10 minutes).")
+                except Exception as e:
+                    st.error(f"❌ Setup failed: {e}")
+    else:
+        username = st.session_state.get("x_username", "Unknown")
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.markdown(f"""
+            <div style="background: rgba(29, 161, 242, 0.1);
+                        backdrop-filter: blur(10px); border-radius: 12px; padding: 1rem;
+                        border: 1px solid rgba(29, 161, 242, 0.4);">
+                <p style="margin: 0; color: rgba(255, 255, 255, 0.9); font-weight: 500;">
+                    ✅ Connected as <strong style="color: #60a5fa;">@{username}</strong>
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+        with col2:
+            if st.button("Disconnect", use_container_width=True):
+                for k in ["x_access_token", "x_access_secret", "x_username", "x_logged_in"]:
+                    st.session_state.pop(k, None)
+                st.rerun()
+
+    # LinkedIn Account Connection
+    st.markdown("---")
+    st.subheader("💼 LinkedIn Account Connection")
+
+    if not st.session_state.get("linkedin_logged_in"):
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.write("Connect your LinkedIn account to enable one-click auto-posting")
+        with col2:
+            if st.button("Connect LinkedIn Account", use_container_width=True, type="secondary"):
+                import secrets
+                from urllib.parse import urlencode
+
+                # Generate random state for CSRF protection
+                oauth_state = secrets.token_urlsafe(32)
+
+                # Store state in temp file (persists across page reloads)
+                try:
+                    state_file = os.path.join(tempfile.gettempdir(), f"linkedin_oauth_state_{oauth_state}.txt")
+                    with open(state_file, "w") as f:
+                        f.write(oauth_state)
+                except Exception as e:
+                    st.error(f"❌ Failed to initialize OAuth: {e}")
+                    st.stop()
+
+                # LinkedIn OAuth 2.0 authorization URL with proper encoding
+                params = {
+                    "response_type": "code",
+                    "client_id": st.secrets['LINKEDIN_CLIENT_ID'],
+                    "redirect_uri": "https://xthreadmaster.streamlit.app/",
+                    "state": oauth_state,
+                    "scope": "openid profile email w_member_social"
+                }
+                linkedin_auth_url = f"https://www.linkedin.com/oauth/v2/authorization?{urlencode(params)}"
+
+                st.markdown(f"### [👉 Click here to authorize with LinkedIn]({linkedin_auth_url})")
+                st.info("💡 You'll be redirected to LinkedIn. After authorizing, you'll return automatically.")
+    else:
+        linkedin_name = st.session_state.get("linkedin_name", "Unknown")
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.markdown(f"""
+            <div style="background: rgba(0, 119, 181, 0.1);
+                        backdrop-filter: blur(10px); border-radius: 12px; padding: 1rem;
+                        border: 1px solid rgba(0, 119, 181, 0.4);">
+                <p style="margin: 0; color: rgba(255, 255, 255, 0.9); font-weight: 500;">
+                    ✅ Connected as <strong style="color: #38bdf8;">{linkedin_name}</strong>
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+        with col2:
+            if st.button("Disconnect LinkedIn", use_container_width=True):
+                for k in ["linkedin_access_token", "linkedin_person_id", "linkedin_name", "linkedin_logged_in"]:
+                    st.session_state.pop(k, None)
+                st.rerun()
+
+# Show helpful message if X is connected but not showing as Pro (email missing)
+if st.session_state.get("x_logged_in") and (not email or not email.strip()):
+    st.info("😊 **You're connected to X!** Just re-enter your Pro email in Account Settings above to unlock all features!")
+
 # === RENDER SIDEBAR ===
 with st.sidebar:
     # Add Analytics Dashboard tab for Pro users
@@ -1175,116 +1283,6 @@ if "oauth_verifier" in query and "oauth_token" in query:
             cleanup_oauth_secret(oauth_token)
             st.session_state.processing_oauth = False
             st.query_params.clear()
-
-# X ACCOUNT CONNECTION (Pro Only)
-if pro:
-    st.markdown("---")
-    st.subheader("🔗 X Account Connection")
-
-    if not st.session_state.get("x_logged_in"):
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            st.write("Connect your X account to enable one-click auto-posting")
-        with col2:
-            if st.button("Connect X Account", use_container_width=True, type="secondary"):
-                auth = tweepy.OAuth1UserHandler(
-                    st.secrets["X_CONSUMER_KEY"],
-                    st.secrets["X_CONSUMER_SECRET"],
-                    callback="https://xthreadmaster.streamlit.app"
-                )
-                try:
-                    auth_url = auth.get_authorization_url(signin_with_twitter=True)
-                    rt = auth.request_token
-
-                    # Store token secret in temporary file storage (survives redirect)
-                    save_oauth_secret(rt["oauth_token"], rt["oauth_token_secret"])
-
-                    st.markdown(f"### [👉 Click here to authorize with X]({auth_url})")
-                    st.info("💡 You'll be redirected to X. After authorizing, you'll return automatically (within 10 minutes).")
-                except Exception as e:
-                    st.error(f"❌ Setup failed: {e}")
-
-    # LOGGED IN
-    else:
-        username = st.session_state.get("x_username", "Unknown")
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            st.markdown(f"""
-            <div style="background: rgba(29, 161, 242, 0.1);
-                        backdrop-filter: blur(10px); border-radius: 12px; padding: 1rem;
-                        border: 1px solid rgba(29, 161, 242, 0.4);">
-                <p style="margin: 0; color: rgba(255, 255, 255, 0.9); font-weight: 500;">
-                    ✅ Connected as <strong style="color: #60a5fa;">@{username}</strong>
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
-        with col2:
-            if st.button("Disconnect", use_container_width=True):
-                for k in ["x_access_token", "x_access_secret", "x_username", "x_logged_in"]:
-                    st.session_state.pop(k, None)
-                st.rerun()
-
-    # === LINKEDIN ACCOUNT CONNECTION (PRO) ===
-    st.markdown("---")
-    st.subheader("💼 LinkedIn Account Connection")
-
-    if not st.session_state.get("linkedin_logged_in"):
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            st.write("Connect your LinkedIn account to enable one-click auto-posting")
-        with col2:
-            if st.button("Connect LinkedIn Account", use_container_width=True, type="secondary"):
-                import secrets
-                from urllib.parse import urlencode
-
-                # Generate random state for CSRF protection
-                oauth_state = secrets.token_urlsafe(32)
-
-                # Store state in temp file (persists across page reloads)
-                try:
-                    state_file = os.path.join(tempfile.gettempdir(), f"linkedin_oauth_state_{oauth_state}.txt")
-                    with open(state_file, "w") as f:
-                        f.write(oauth_state)
-                except Exception as e:
-                    st.error(f"❌ Failed to initialize OAuth: {e}")
-                    st.stop()
-
-                # LinkedIn OAuth 2.0 authorization URL with proper encoding
-                params = {
-                    "response_type": "code",
-                    "client_id": st.secrets['LINKEDIN_CLIENT_ID'],
-                    "redirect_uri": "https://xthreadmaster.streamlit.app/",
-                    "state": oauth_state,
-                    "scope": "openid profile email w_member_social"
-                }
-                linkedin_auth_url = f"https://www.linkedin.com/oauth/v2/authorization?{urlencode(params)}"
-
-                st.markdown(f"### [👉 Click here to authorize with LinkedIn]({linkedin_auth_url})")
-                st.info("💡 You'll be redirected to LinkedIn. After authorizing, you'll return automatically.")
-
-    # LOGGED IN
-    else:
-        linkedin_name = st.session_state.get("linkedin_name", "Unknown")
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            st.markdown(f"""
-            <div style="background: rgba(0, 119, 181, 0.1);
-                        backdrop-filter: blur(10px); border-radius: 12px; padding: 1rem;
-                        border: 1px solid rgba(0, 119, 181, 0.4);">
-                <p style="margin: 0; color: rgba(255, 255, 255, 0.9); font-weight: 500;">
-                    ✅ Connected as <strong style="color: #38bdf8;">{linkedin_name}</strong>
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
-        with col2:
-            if st.button("Disconnect LinkedIn", use_container_width=True):
-                for k in ["linkedin_access_token", "linkedin_person_id", "linkedin_name", "linkedin_logged_in"]:
-                    st.session_state.pop(k, None)
-                st.rerun()
-
-# Show helpful message if X is connected but not showing as Pro (email missing)
-if st.session_state.get("x_logged_in") and (not email or not email.strip()):
-    st.info("😊 **You're connected to X!** Just re-enter your Pro email in Account Settings above to unlock all features!")
 
 # === GENERATE ===
 st.markdown("---")
