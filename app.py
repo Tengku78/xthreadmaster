@@ -583,8 +583,17 @@ Requirements:
             if len(generation_errors) > 3:
                 st.caption(f"• ... and {len(generation_errors) - 3} more errors")
 
-        if not carousel_images and stability_api_key:
-            st.warning("⚠️ No images were generated. Captions are still available below.")
+        # Always show status of image generation
+        if stability_api_key and not carousel_images:
+            if generation_errors:
+                st.error("❌ All image generations failed. Check errors above.")
+            else:
+                st.error("❌ No images were generated and no errors were logged. This may indicate:")
+                st.info("1. The API key format is incorrect\n2. Network timeout issues\n3. Invalid API response format")
+                st.info(f"💡 Debug info: Attempted to generate {len(slides)} images")
+        elif not stability_api_key and not carousel_images:
+            # Already showed warning above, no need to repeat
+            pass
 
         # Increment carousel count
         st.session_state.carousel_count += 1
