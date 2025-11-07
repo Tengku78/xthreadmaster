@@ -711,11 +711,17 @@ Requirements:
 
     # Save to history (Pro users only, keep last 10)
     if pro:
+        # Get content based on platform
+        if platform == "X Thread" or platform == "LinkedIn Post":
+            content = st.session_state.thread
+        else:  # Instagram Carousel
+            content = st.session_state.carousel
+
         history_entry = {
             "topic": topic,
             "tone": tone,
             "length": length,
-            "content": thread if platform == "X Thread" else carousel,
+            "content": content,
             "platform": platform,
             "timestamp": datetime.now().isoformat()
         }
