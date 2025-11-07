@@ -632,19 +632,19 @@ if email == "testtest@gmail.com":
 pro = user_tier in ['pro', 'visual_pack']
 visual_pack = user_tier == 'visual_pack'
 
-# === OAUTH CONNECTIONS (Pro Only) ===
+# === OAUTH CONNECTIONS (Pro Only) - COMPACT UI ===
 if pro:
     st.markdown("---")
+    st.subheader("🔗 Connect Social Accounts")
 
-    # X Account Connection
-    st.subheader("🔗 X Account Connection")
+    # Show both X and LinkedIn in columns for compact display
+    col1, col2 = st.columns(2)
 
-    if not st.session_state.get("x_logged_in"):
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            st.write("Connect your X account to enable one-click auto-posting")
-        with col2:
-            if st.button("Connect X Account", use_container_width=True, type="secondary"):
+    # X Account (Left Column)
+    with col1:
+        st.markdown("**X (Twitter)**")
+        if not st.session_state.get("x_logged_in"):
+            if st.button("🐦 Connect X", use_container_width=True, type="secondary", key="connect_x_btn"):
                 auth = tweepy.OAuth1UserHandler(
                     st.secrets["X_CONSUMER_KEY"],
                     st.secrets["X_CONSUMER_SECRET"],
@@ -653,85 +653,48 @@ if pro:
                 try:
                     auth_url = auth.get_authorization_url(signin_with_twitter=True)
                     rt = auth.request_token
-
-                    # Store token secret in temporary file storage (survives redirect)
                     save_oauth_secret(rt["oauth_token"], rt["oauth_token_secret"])
-
-                    st.markdown(f"### [👉 Click here to authorize with X]({auth_url})")
-                    st.info("💡 You'll be redirected to X. After authorizing, you'll return automatically (within 10 minutes).")
+                    st.markdown(f"[👉 Authorize X]({auth_url})")
                 except Exception as e:
-                    st.error(f"❌ Setup failed: {e}")
-    else:
-        username = st.session_state.get("x_username", "Unknown")
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            st.markdown(f"""
-            <div style="background: rgba(29, 161, 242, 0.1);
-                        backdrop-filter: blur(10px); border-radius: 12px; padding: 1rem;
-                        border: 1px solid rgba(29, 161, 242, 0.4);">
-                <p style="margin: 0; color: rgba(255, 255, 255, 0.9); font-weight: 500;">
-                    ✅ Connected as <strong style="color: #60a5fa;">@{username}</strong>
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
-        with col2:
-            if st.button("Disconnect", use_container_width=True):
+                    st.error(f"❌ Failed: {e}")
+        else:
+            username = st.session_state.get("x_username", "Unknown")
+            st.success(f"✅ @{username}")
+            if st.button("Disconnect", use_container_width=True, key="disconnect_x_btn"):
                 for k in ["x_access_token", "x_access_secret", "x_username", "x_logged_in"]:
                     st.session_state.pop(k, None)
                 st.rerun()
 
-    # LinkedIn Account Connection
-    st.markdown("---")
-    st.subheader("💼 LinkedIn Account Connection")
-
-    if not st.session_state.get("linkedin_logged_in"):
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            st.write("Connect your LinkedIn account to enable one-click auto-posting")
-        with col2:
-            if st.button("Connect LinkedIn Account", use_container_width=True, type="secondary"):
+    # LinkedIn Account (Right Column)
+    with col2:
+        st.markdown("**LinkedIn**")
+        if not st.session_state.get("linkedin_logged_in"):
+            if st.button("💼 Connect LinkedIn", use_container_width=True, type="secondary", key="connect_linkedin_btn"):
                 import secrets
                 from urllib.parse import urlencode
 
-                # Generate random state for CSRF protection
                 oauth_state = secrets.token_urlsafe(32)
-
-                # Store state in temp file (persists across page reloads)
                 try:
                     state_file = os.path.join(tempfile.gettempdir(), f"linkedin_oauth_state_{oauth_state}.txt")
                     with open(state_file, "w") as f:
                         f.write(oauth_state)
+
+                    params = {
+                        "response_type": "code",
+                        "client_id": st.secrets['LINKEDIN_CLIENT_ID'],
+                        "redirect_uri": "https://xthreadmaster.streamlit.app/",
+                        "state": oauth_state,
+                        "scope": "openid profile email w_member_social"
+                    }
+                    linkedin_auth_url = f"https://www.linkedin.com/oauth/v2/authorization?{urlencode(params)}"
+                    st.markdown(f"[👉 Authorize LinkedIn]({linkedin_auth_url})")
                 except Exception as e:
-                    st.error(f"❌ Failed to initialize OAuth: {e}")
-                    st.stop()
-
-                # LinkedIn OAuth 2.0 authorization URL with proper encoding
-                params = {
-                    "response_type": "code",
-                    "client_id": st.secrets['LINKEDIN_CLIENT_ID'],
-                    "redirect_uri": "https://xthreadmaster.streamlit.app/",
-                    "state": oauth_state,
-                    "scope": "openid profile email w_member_social"
-                }
-                linkedin_auth_url = f"https://www.linkedin.com/oauth/v2/authorization?{urlencode(params)}"
-
-                st.markdown(f"### [👉 Click here to authorize with LinkedIn]({linkedin_auth_url})")
-                st.info("💡 You'll be redirected to LinkedIn. After authorizing, you'll return automatically.")
-    else:
-        linkedin_name = st.session_state.get("linkedin_name", "Unknown")
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            st.markdown(f"""
-            <div style="background: rgba(0, 119, 181, 0.1);
-                        backdrop-filter: blur(10px); border-radius: 12px; padding: 1rem;
-                        border: 1px solid rgba(0, 119, 181, 0.4);">
-                <p style="margin: 0; color: rgba(255, 255, 255, 0.9); font-weight: 500;">
-                    ✅ Connected as <strong style="color: #38bdf8;">{linkedin_name}</strong>
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
-        with col2:
-            if st.button("Disconnect LinkedIn", use_container_width=True):
+                    st.error(f"❌ Failed: {e}")
+        else:
+            linkedin_name = st.session_state.get("linkedin_name", "Unknown")
+            name_display = linkedin_name.split()[0] if linkedin_name != "Unknown" else "Unknown"
+            st.success(f"✅ {name_display}")
+            if st.button("Disconnect", use_container_width=True, key="disconnect_linkedin_btn"):
                 for k in ["linkedin_access_token", "linkedin_person_id", "linkedin_name", "linkedin_logged_in"]:
                     st.session_state.pop(k, None)
                 st.rerun()
