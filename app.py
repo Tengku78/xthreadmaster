@@ -788,54 +788,62 @@ if "thread" in st.session_state and st.session_state.thread:
             st.success("✅ Copied to clipboard!")
 
     with col3:
-        if pro and st.session_state.get("x_logged_in"):
-            if st.button("🚀 Post to X", use_container_width=True, type="primary"):
-                with st.spinner("📤 Posting thread to X..."):
-                    try:
-                        client = tweepy.Client(
-                            consumer_key=st.secrets["X_CONSUMER_KEY"],
-                            consumer_secret=st.secrets["X_CONSUMER_SECRET"],
-                            access_token=st.session_state.x_access_token,
-                            access_token_secret=st.session_state.x_access_secret,
-                        )
+        # Only show X auto-posting for X Threads (not LinkedIn Posts)
+        if st.session_state.get("platform") == "X Thread":
+            if pro and st.session_state.get("x_logged_in"):
+                if st.button("🚀 Post to X", use_container_width=True, type="primary"):
+                    with st.spinner("📤 Posting thread to X..."):
+                        try:
+                            client = tweepy.Client(
+                                consumer_key=st.secrets["X_CONSUMER_KEY"],
+                                consumer_secret=st.secrets["X_CONSUMER_SECRET"],
+                                access_token=st.session_state.x_access_token,
+                                access_token_secret=st.session_state.x_access_secret,
+                            )
 
-                        tweets = [t.strip() for t in st.session_state.thread.split("\n") if t.strip()]
+                            tweets = [t.strip() for t in st.session_state.thread.split("\n") if t.strip()]
 
-                        if not tweets:
-                            st.error("❌ No tweets to post!")
-                            st.stop()
+                            if not tweets:
+                                st.error("❌ No tweets to post!")
+                                st.stop()
 
-                        # Post first tweet
-                        first = client.create_tweet(text=tweets[0])
-                        tid = first.data["id"]
-                        posted_count = 1
+                            # Post first tweet
+                            first = client.create_tweet(text=tweets[0])
+                            tid = first.data["id"]
+                            posted_count = 1
 
-                        # Post remaining tweets as replies
-                        for t in tweets[1:]:
-                            try:
-                                resp = client.create_tweet(in_reply_to_tweet_id=tid, text=t)
-                                tid = resp.data["id"]
-                                posted_count += 1
-                            except Exception as e:
-                                st.warning(f"⚠️ Failed to post tweet {posted_count + 1}: {e}")
-                                break
+                            # Post remaining tweets as replies
+                            for t in tweets[1:]:
+                                try:
+                                    resp = client.create_tweet(in_reply_to_tweet_id=tid, text=t)
+                                    tid = resp.data["id"]
+                                    posted_count += 1
+                                except Exception as e:
+                                    st.warning(f"⚠️ Failed to post tweet {posted_count + 1}: {e}")
+                                    break
 
-                        url = f"https://x.com/{st.session_state.x_username}/status/{first.data['id']}"
-                        st.success(f"✅ Posted {posted_count}/{len(tweets)} tweets!")
-                        st.markdown(f"### [🔗 View Your Thread on X]({url})")
-                        st.balloons()
+                            url = f"https://x.com/{st.session_state.x_username}/status/{first.data['id']}"
+                            st.success(f"✅ Posted {posted_count}/{len(tweets)} tweets!")
+                            st.markdown(f"### [🔗 View Your Thread on X]({url})")
+                            st.balloons()
 
-                    except tweepy.errors.Unauthorized:
-                        st.error("❌ X authorization expired. Please reconnect your account.")
-                        st.session_state.x_logged_in = False
-                    except tweepy.errors.Forbidden as e:
-                        st.error(f"❌ X API access forbidden: {e}")
-                    except Exception as e:
-                        st.error(f"❌ Failed to post: {e}")
-        elif pro and not st.session_state.get("x_logged_in"):
-            st.info("🔗 Connect your X account above to enable auto-posting")
+                        except tweepy.errors.Unauthorized:
+                            st.error("❌ X authorization expired. Please reconnect your account.")
+                            st.session_state.x_logged_in = False
+                        except tweepy.errors.Forbidden as e:
+                            st.error(f"❌ X API access forbidden: {e}")
+                        except Exception as e:
+                            st.error(f"❌ Failed to post: {e}")
+            elif pro and not st.session_state.get("x_logged_in"):
+                st.info("🔗 Connect your X account above to enable auto-posting")
+            else:
+                st.info("💎 Upgrade to Pro to enable auto-posting")
+        elif st.session_state.get("platform") == "LinkedIn Post":
+            # LinkedIn: Just show helpful message (OAuth not implemented yet)
+            st.info("💡 Copy your post and paste it on LinkedIn")
         else:
-            st.info("💎 Upgrade to Pro to enable auto-posting")
+            # Fallback for any other platform
+            pass
 
     # Show remaining generations for free users
     if not pro and "remaining" in st.session_state and st.session_state.remaining is not None:
