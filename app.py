@@ -507,9 +507,12 @@ Requirements:
         # Parse carousel to extract slide titles
         slides = []
         for line in carousel.split('\n'):
-            if line.strip().startswith('SLIDE'):
-                if ':' in line:
-                    title = line.split(':', 1)[1].strip()
+            # Remove markdown formatting (**, *, etc.) before checking
+            clean_line = line.strip().lstrip('*').strip()
+            if clean_line.startswith('SLIDE'):
+                if ':' in clean_line:
+                    # Extract title after colon, remove any trailing markdown
+                    title = clean_line.split(':', 1)[1].strip().rstrip('*').strip()
                     slides.append(title)
 
         # Stability AI configuration
