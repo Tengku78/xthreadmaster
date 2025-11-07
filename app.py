@@ -501,27 +501,27 @@ Requirements:
                 st.stop()
 
         # Generate AI images with Stability AI
-        with st.spinner(f"🖼️ Generating {length} AI images for your carousel..."):
-            carousel_images = []
+        carousel_images = []
+        generation_errors = []
 
-            # Parse carousel to extract slide titles
-            slides = []
-            for line in carousel.split('\n'):
-                if line.strip().startswith('SLIDE'):
-                    if ':' in line:
-                        title = line.split(':', 1)[1].strip()
-                        slides.append(title)
+        # Parse carousel to extract slide titles
+        slides = []
+        for line in carousel.split('\n'):
+            if line.strip().startswith('SLIDE'):
+                if ':' in line:
+                    title = line.split(':', 1)[1].strip()
+                    slides.append(title)
 
-            # Stability AI configuration
-            stability_api_key = st.secrets.get("STABILITY_API_KEY", "")
+        # Stability AI configuration
+        stability_api_key = st.secrets.get("STABILITY_API_KEY", "")
 
-            if not stability_api_key:
-                st.warning("⚠️ Stability AI API key not configured. Images will not be generated.")
-                st.info("Add STABILITY_API_KEY to your secrets to enable AI image generation.")
-            else:
+        if not stability_api_key:
+            st.warning("⚠️ Stability AI API key not configured. Images will not be generated.")
+            st.info("Add STABILITY_API_KEY to your secrets to enable AI image generation.")
+        else:
+            with st.spinner(f"🖼️ Generating {length} AI images for your carousel..."):
                 # Generate images using Stability AI API
                 api_host = "https://api.stability.ai"
-                generation_errors = []
 
                 for i, slide_title in enumerate(slides, 1):
                     try:
@@ -575,16 +575,16 @@ Requirements:
                         generation_errors.append(f"Slide {i}: {str(e)}")
                         continue
 
-            # Show consolidated error messages after spinner closes
-            if generation_errors:
-                st.warning("⚠️ Some images failed to generate:")
-                for error in generation_errors[:3]:  # Show first 3 errors
-                    st.caption(f"• {error}")
-                if len(generation_errors) > 3:
-                    st.caption(f"• ... and {len(generation_errors) - 3} more errors")
+        # Show consolidated error messages OUTSIDE spinner
+        if generation_errors:
+            st.warning("⚠️ Some images failed to generate:")
+            for error in generation_errors[:3]:  # Show first 3 errors
+                st.caption(f"• {error}")
+            if len(generation_errors) > 3:
+                st.caption(f"• ... and {len(generation_errors) - 3} more errors")
 
-            if not carousel_images:
-                st.warning("⚠️ No images were generated. Captions are still available below.")
+        if not carousel_images and stability_api_key:
+            st.warning("⚠️ No images were generated. Captions are still available below.")
 
         # Increment carousel count
         st.session_state.carousel_count += 1
