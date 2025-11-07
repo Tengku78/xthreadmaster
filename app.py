@@ -819,4 +819,4 @@ if "carousel" in st.session_state and st.session_state.carousel and st.session_s
         """)
 
 st.markdown("---")
-st.caption(f"Made with ❤️ using Gemini AI • [Pro ($12)]({STRIPE_PRO_LINK}) • [Visual Pack ($17)]({STRIPE_VISUAL_PACK_LINK})")
+st.markdown(f"<p style='text-align: center; color: gray; font-size: 14px;'>Made with ❤️ using Gemini AI • <a href='{STRIPE_PRO_LINK}' target='_blank'>Pro ($12)</a> • <a href='{STRIPE_VISUAL_PACK_LINK}' target='_blank'>Visual Pack ($17)</a></p>", unsafe_allow_html=True)
