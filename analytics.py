@@ -64,7 +64,8 @@ def get_empty_analytics() -> Dict:
         "generations_by_tone": {},
         "templates_used": {},
         "daily_activity": {},
-        "generation_history": []
+        "generation_history": [],
+        "posted_tweets": {}  # Store tweet IDs with their metrics
     }
 
 def save_user_analytics(email: str, data: Dict):
@@ -243,6 +244,174 @@ def get_daily_activity_chart_data(email: str, days: int = 30) -> List[Dict]:
         })
 
     return chart_data
+
+def track_posted_tweet(email: str, tweet_id: str, topic: str, tone: str, template_used: Optional[str] = None):
+    """
+    Track a tweet that was successfully posted to X
+
+    Args:
+        email: User's email
+        tweet_id: The ID of the posted tweet (from X API)
+        topic: Tweet topic/subject
+        tone: Content tone
+        template_used: Template name if used
+    """
+    if not email or not email.strip() or not tweet_id:
+        return
+
+    analytics = load_user_analytics(email)
+
+    # Ensure posted_tweets exists (for backward compatibility)
+    if "posted_tweets" not in analytics:
+        analytics["posted_tweets"] = {}
+
+    # Store tweet info
+    analytics["posted_tweets"][tweet_id] = {
+        "posted_at": datetime.now().isoformat(),
+        "topic": topic[:100] if topic else "",
+        "tone": tone,
+        "template_used": template_used,
+        "metrics": {
+            "likes": 0,
+            "retweets": 0,
+            "replies": 0,
+            "views": 0,
+            "bookmarks": 0
+        },
+        "last_fetched": None
+    }
+
+    save_user_analytics(email, analytics)
+
+def fetch_tweet_metrics(email: str, tweet_id: str, client) -> Optional[Dict]:
+    """
+    Fetch engagement metrics for a specific tweet using X API v2
+
+    Args:
+        email: User's email
+        tweet_id: The tweet ID to fetch metrics for
+        client: Authenticated tweepy.Client instance
+
+    Returns:
+        Dict with updated metrics or None if failed
+    """
+    try:
+        # Fetch tweet with public metrics
+        tweet = client.get_tweet(
+            id=tweet_id,
+            tweet_fields=["public_metrics", "created_at"]
+        )
+
+        if tweet.data:
+            metrics = tweet.data.public_metrics
+            return {
+                "likes": metrics.get("like_count", 0),
+                "retweets": metrics.get("retweet_count", 0),
+                "replies": metrics.get("reply_count", 0),
+                "views": metrics.get("impression_count", 0),
+                "bookmarks": metrics.get("bookmark_count", 0)
+            }
+        return None
+    except Exception as e:
+        print(f"Error fetching tweet metrics: {e}")
+        return None
+
+def refresh_all_tweet_metrics(email: str, client) -> int:
+    """
+    Refresh engagement metrics for all posted tweets
+
+    Args:
+        email: User's email
+        client: Authenticated tweepy.Client instance
+
+    Returns:
+        Number of tweets successfully refreshed
+    """
+    if not email or not email.strip():
+        return 0
+
+    analytics = load_user_analytics(email)
+
+    if "posted_tweets" not in analytics or not analytics["posted_tweets"]:
+        return 0
+
+    refreshed_count = 0
+
+    for tweet_id, tweet_data in analytics["posted_tweets"].items():
+        metrics = fetch_tweet_metrics(email, tweet_id, client)
+        if metrics:
+            tweet_data["metrics"] = metrics
+            tweet_data["last_fetched"] = datetime.now().isoformat()
+            refreshed_count += 1
+
+    save_user_analytics(email, analytics)
+    return refreshed_count
+
+def get_engagement_summary(email: str) -> Optional[Dict]:
+    """
+    Get engagement metrics summary for analytics dashboard
+
+    Returns:
+        Dict with engagement stats or None if no data
+    """
+    if not email or not email.strip():
+        return None
+
+    analytics = load_user_analytics(email)
+
+    if "posted_tweets" not in analytics or not analytics["posted_tweets"]:
+        return None
+
+    posted_tweets = analytics["posted_tweets"]
+
+    # Calculate totals
+    total_likes = sum(t["metrics"]["likes"] for t in posted_tweets.values())
+    total_retweets = sum(t["metrics"]["retweets"] for t in posted_tweets.values())
+    total_replies = sum(t["metrics"]["replies"] for t in posted_tweets.values())
+    total_views = sum(t["metrics"]["views"] for t in posted_tweets.values())
+    total_bookmarks = sum(t["metrics"]["bookmarks"] for t in posted_tweets.values())
+
+    total_posts = len(posted_tweets)
+    total_engagement = total_likes + total_retweets + total_replies + total_bookmarks
+
+    # Find best performing tweet
+    best_tweet = None
+    best_engagement = 0
+
+    for tweet_id, tweet_data in posted_tweets.items():
+        engagement = (
+            tweet_data["metrics"]["likes"] +
+            tweet_data["metrics"]["retweets"] +
+            tweet_data["metrics"]["replies"] +
+            tweet_data["metrics"]["bookmarks"]
+        )
+        if engagement > best_engagement:
+            best_engagement = engagement
+            best_tweet = {
+                "tweet_id": tweet_id,
+                "topic": tweet_data["topic"],
+                "engagement": engagement,
+                "metrics": tweet_data["metrics"]
+            }
+
+    # Calculate averages
+    avg_likes = total_likes / total_posts if total_posts > 0 else 0
+    avg_retweets = total_retweets / total_posts if total_posts > 0 else 0
+    avg_engagement = total_engagement / total_posts if total_posts > 0 else 0
+
+    return {
+        "total_posts": total_posts,
+        "total_likes": total_likes,
+        "total_retweets": total_retweets,
+        "total_replies": total_replies,
+        "total_views": total_views,
+        "total_bookmarks": total_bookmarks,
+        "total_engagement": total_engagement,
+        "avg_likes": round(avg_likes, 1),
+        "avg_retweets": round(avg_retweets, 1),
+        "avg_engagement": round(avg_engagement, 1),
+        "best_tweet": best_tweet
+    }
 
 def clear_user_analytics(email: str) -> bool:
     """

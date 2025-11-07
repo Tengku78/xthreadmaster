@@ -19,7 +19,15 @@ from templates import (
     get_template_by_id,
     fill_template
 )
-from analytics import track_generation, get_analytics_summary, get_daily_activity_chart_data, clear_user_analytics
+from analytics import (
+    track_generation,
+    get_analytics_summary,
+    get_daily_activity_chart_data,
+    clear_user_analytics,
+    track_posted_tweet,
+    refresh_all_tweet_metrics,
+    get_engagement_summary
+)
 
 # === CONFIG ===
 # NOTE: genai.configure() is now called lazily in get_model() to prevent deployment hangs
@@ -346,6 +354,69 @@ with st.sidebar:
                 st.line_chart(df.set_index('date')['count'], use_container_width=True)
             else:
                 st.caption("No activity data yet")
+
+            st.markdown("---")
+
+            # X Engagement Metrics (if user has posted tweets)
+            if st.session_state.get("x_logged_in"):
+                engagement = get_engagement_summary(email)
+
+                if engagement and engagement["total_posts"] > 0:
+                    st.markdown("**🔥 X Engagement**")
+
+                    # Total engagement metrics
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Posts", engagement["total_posts"])
+                    with col2:
+                        st.metric("❤️ Likes", f"{engagement['total_likes']:,}")
+                    with col3:
+                        st.metric("🔄 Retweets", f"{engagement['total_retweets']:,}")
+
+                    # Additional metrics
+                    col4, col5, col6 = st.columns(3)
+                    with col4:
+                        st.metric("💬 Replies", f"{engagement['total_replies']:,}")
+                    with col5:
+                        st.metric("👁️ Views", f"{engagement['total_views']:,}" if engagement['total_views'] > 0 else "N/A")
+                    with col6:
+                        st.metric("🔖 Saves", f"{engagement['total_bookmarks']:,}")
+
+                    # Averages
+                    st.caption(f"**Avg Engagement:** {engagement['avg_engagement']:.1f} per post")
+                    st.caption(f"**Avg Likes:** {engagement['avg_likes']:.1f} | **Avg Retweets:** {engagement['avg_retweets']:.1f}")
+
+                    # Best performing tweet
+                    if engagement["best_tweet"]:
+                        best = engagement["best_tweet"]
+                        st.markdown(f"**🏆 Best Thread:** {best['topic'][:50]}...")
+                        st.caption(f"❤️ {best['metrics']['likes']} | 🔄 {best['metrics']['retweets']} | 💬 {best['metrics']['replies']} | Total: {best['engagement']}")
+
+                    # Refresh Metrics Button
+                    if st.button("🔄 Refresh Engagement Metrics", use_container_width=True, help="Fetch latest engagement data from X"):
+                        with st.spinner("Fetching latest metrics from X..."):
+                            try:
+                                # Create authenticated client
+                                client = tweepy.Client(
+                                    consumer_key=st.secrets["X_CONSUMER_KEY"],
+                                    consumer_secret=st.secrets["X_CONSUMER_SECRET"],
+                                    access_token=st.session_state.x_access_token,
+                                    access_token_secret=st.session_state.x_access_secret,
+                                )
+
+                                # Refresh all tweet metrics
+                                refreshed_count = refresh_all_tweet_metrics(email, client)
+
+                                if refreshed_count > 0:
+                                    st.success(f"✅ Updated metrics for {refreshed_count} post(s)!")
+                                    st.rerun()
+                                else:
+                                    st.info("📊 No posts to refresh")
+
+                            except Exception as e:
+                                st.error(f"❌ Failed to refresh metrics: {e}")
+
+                    st.markdown("---")
 
             st.markdown("---")
 
@@ -1205,6 +1276,24 @@ if "thread" in st.session_state and st.session_state.thread:
                             url = f"https://x.com/{st.session_state.x_username}/status/{first.data['id']}"
                             st.success(f"✅ Posted {posted_count}/{len(tweets)} tweets!")
                             st.markdown(f"### [🔗 View Your Thread on X]({url})")
+
+                            # Track posted tweet for engagement analytics
+                            if email and email.strip():
+                                # Get topic and tone from the current generation
+                                generation_topic = topic if 'topic' in locals() else "X Thread"
+                                generation_tone = tone if 'tone' in locals() else "Unknown"
+                                template_name = None
+                                if st.session_state.get("template_mode") and "selected_template" in st.session_state:
+                                    template_name = st.session_state.selected_template["title"]
+
+                                track_posted_tweet(
+                                    email=email,
+                                    tweet_id=first.data['id'],
+                                    topic=generation_topic,
+                                    tone=generation_tone,
+                                    template_used=template_name
+                                )
+
                             st.balloons()
 
                         except tweepy.errors.Unauthorized:
