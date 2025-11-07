@@ -243,3 +243,26 @@ def get_daily_activity_chart_data(email: str, days: int = 30) -> List[Dict]:
         })
 
     return chart_data
+
+def clear_user_analytics(email: str) -> bool:
+    """
+    Clear all analytics data for a user
+    Useful for privacy-conscious users who want to reset their data
+
+    Returns:
+        True if data was cleared successfully, False otherwise
+    """
+    if not email or not email.strip():
+        return False
+
+    filepath = get_analytics_file(email)
+
+    if not os.path.exists(filepath):
+        return True  # Already clear
+
+    try:
+        os.remove(filepath)
+        return True
+    except Exception as e:
+        print(f"Error clearing analytics: {e}")
+        return False

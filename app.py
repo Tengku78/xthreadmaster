@@ -19,7 +19,7 @@ from templates import (
     get_template_by_id,
     fill_template
 )
-from analytics import track_generation, get_analytics_summary, get_daily_activity_chart_data
+from analytics import track_generation, get_analytics_summary, get_daily_activity_chart_data, clear_user_analytics
 
 # === CONFIG ===
 # NOTE: genai.configure() is now called lazily in get_model() to prevent deployment hangs
@@ -361,6 +361,16 @@ with st.sidebar:
                     st.caption(f"   {entry['topic'][:40]}...")
             else:
                 st.caption("No recent activity")
+
+            # Clear Analytics Button (at bottom)
+            st.markdown("---")
+            if st.button("🗑️ Clear All Analytics", use_container_width=True, help="Permanently delete all your analytics data"):
+                if clear_user_analytics(email):
+                    st.success("✅ Analytics data cleared successfully!")
+                    st.info("Your data has been permanently deleted. New analytics will be tracked starting now.")
+                    st.rerun()
+                else:
+                    st.error("❌ Failed to clear analytics data. Please try again.")
 
         else:
             st.info("📊 Generate content to see your analytics here!")
