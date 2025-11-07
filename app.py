@@ -26,7 +26,9 @@ from analytics import (
     clear_user_analytics,
     track_posted_tweet,
     refresh_all_tweet_metrics,
-    get_engagement_summary
+    get_engagement_summary,
+    save_thread_to_history,
+    get_thread_history
 )
 
 # === CONFIG ===
@@ -187,8 +189,7 @@ if "carousel_images" not in st.session_state:
     st.session_state.carousel_images = []
 if "platform" not in st.session_state:
     st.session_state.platform = "X Thread"
-if "thread_history" not in st.session_state:
-    st.session_state.thread_history = []
+# Thread history now stored in Supabase (removed session state)
 
 st.title("🚀 XThreadMaster")
 st.markdown("Generate viral X threads in seconds with AI")
@@ -617,18 +618,32 @@ if pro:
         st.markdown("---")
         st.subheader("📚 Thread History")
 
-        if st.session_state.thread_history:
+        # Load history from Supabase
+        thread_history = get_thread_history(email, limit=10)
+
+        if thread_history:
             st.caption("Your last 10 threads")
-            for idx, entry in enumerate(st.session_state.thread_history):
-                with st.expander(f"🧵 {entry['topic'][:30]}...", expanded=False):
-                    st.caption(f"**Tone:** {entry['tone']} | **Length:** {entry['length']} tweets")
+            for idx, entry in enumerate(thread_history):
+                platform_emoji = {"X Thread": "🐦", "LinkedIn Post": "💼", "Instagram Carousel": "📸"}.get(entry['platform'], "📝")
+                with st.expander(f"{platform_emoji} {entry['platform']} - {datetime.fromisoformat(entry['timestamp']).strftime('%b %d, %I:%M %p')}", expanded=False):
+                    st.caption(f"**Platform:** {entry['platform']}")
                     st.caption(f"**Created:** {datetime.fromisoformat(entry['timestamp']).strftime('%b %d, %I:%M %p')}")
 
-                    if st.button(f"📥 Load", key=f"load_{idx}", use_container_width=True):
-                        st.session_state.thread = entry['thread']
+                    # Show preview of content
+                    st.text_area(
+                        "Content Preview",
+                        value=entry['content'][:500] + ("..." if len(entry['content']) > 500 else ""),
+                        height=100,
+                        disabled=True,
+                        key=f"preview_{idx}"
+                    )
+
+                    if st.button(f"📥 Load This {entry['platform']}", key=f"load_{idx}", use_container_width=True):
+                        st.session_state.thread = entry['content']
+                        st.session_state.platform = entry['platform']
                         st.rerun()
         else:
-            st.caption("Generate threads to see them here!")
+            st.caption("Generate content to see your history here!")
 
 # Show subscription status
 if email and email.strip():
@@ -1160,24 +1175,16 @@ Requirements:
                 template_id=template_id
             )
 
-    # Save to history (Pro users only, keep last 10)
-    if pro:
+    # Save to history (Pro users only, keep last 10) - now using Supabase
+    if pro and email and email.strip():
         # Get content based on platform
         if platform == "X Thread" or platform == "LinkedIn Post":
             content = st.session_state.thread
         else:  # Instagram Carousel
             content = st.session_state.carousel
 
-        history_entry = {
-            "topic": topic,
-            "tone": tone,
-            "length": length,
-            "content": content,
-            "platform": platform,
-            "timestamp": datetime.now().isoformat()
-        }
-        st.session_state.thread_history.insert(0, history_entry)
-        st.session_state.thread_history = st.session_state.thread_history[:10]
+        # Save to Supabase
+        save_thread_to_history(email, platform, content)
 
     # Don't rerun - let the error messages display and content show naturally below
 
