@@ -1845,8 +1845,8 @@ if "thread" in st.session_state and st.session_state.thread:
                 if st.button("🚀 Post to LinkedIn", use_container_width=True, type="primary"):
                     with st.spinner("📤 Posting to LinkedIn..."):
                         try:
-                            # Get the LinkedIn post content (remove the footer for LinkedIn)
-                            linkedin_content = st.session_state.get("linkedin_post", "")
+                            # Get the LinkedIn post content from thread (where it's stored)
+                            linkedin_content = st.session_state.get("thread", "")
 
                             if not linkedin_content or not linkedin_content.strip():
                                 st.error("❌ No content to post!")
