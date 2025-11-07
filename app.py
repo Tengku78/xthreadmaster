@@ -10,6 +10,14 @@ import io
 import zipfile
 from PIL import Image
 import base64
+from templates import (
+    get_all_templates,
+    get_free_templates,
+    get_pro_templates,
+    get_categories,
+    get_template_by_id,
+    fill_template
+)
 
 # === CONFIG ===
 # NOTE: genai.configure() is now called lazily in get_model() to prevent deployment hangs
@@ -153,17 +161,20 @@ with st.sidebar:
 
     ### ✨ Features
     - 🤖 AI-powered content generation
+    - 📚 Pre-written templates library
     - 🎨 Multiple tone options
     - 📥 Download content
     - 🚀 Auto-post to X (Pro+)
 
     ### 🆓 Free Tier
     - 3 X threads per day
+    - 5 content templates
     - Manual posting
 
     ### 💎 Pro ($12/mo)
     - ♾️ Unlimited X threads
     - 💼 LinkedIn posts (B2B content)
+    - 📚 15+ content templates (all categories)
     - 🚀 One-click auto-posting to X
     - 🔗 X account integration
     - ✏️ Edit before posting
@@ -314,9 +325,97 @@ platform = st.selectbox(
     help="Choose which platform to generate content for"
 )
 
+# === TEMPLATES SECTION ===
+st.markdown("---")
+st.subheader("📚 Use a Template (Optional)")
+
+# Get available templates based on user tier
+if pro:
+    available_templates = get_all_templates()
+    template_count_text = "✨ **Pro Access:** All 15+ templates unlocked"
+else:
+    available_templates = get_free_templates()
+    template_count_text = f"🆓 **Free Tier:** {len(available_templates)} templates available | [Upgrade to Pro]({STRIPE_PRO_LINK}) for 15+ templates"
+
+st.info(template_count_text)
+
+# Filter templates by platform
+platform_templates = [t for t in available_templates if t["platform"] == platform]
+
+if platform_templates:
+    # Template selector
+    use_template = st.checkbox("🎯 Start from a template", value=False, help="Pre-written, proven templates you can customize")
+
+    if use_template:
+        # Category filter
+        categories = list(set(t["category"] for t in platform_templates))
+        selected_category = st.selectbox(
+            "Category",
+            ["All"] + sorted(categories),
+            help="Filter templates by category"
+        )
+
+        # Filter by category
+        if selected_category == "All":
+            filtered_templates = platform_templates
+        else:
+            filtered_templates = [t for t in platform_templates if t["category"] == selected_category]
+
+        # Template selection
+        template_options = {f"{t['title']} ({t['category']})": t['id'] for t in filtered_templates}
+
+        if template_options:
+            selected_template_name = st.selectbox(
+                "Choose Template",
+                list(template_options.keys()),
+                help="Select a proven template to customize"
+            )
+
+            selected_template_id = template_options[selected_template_name]
+            selected_template = get_template_by_id(selected_template_id)
+
+            # Show template preview
+            with st.expander("👁️ Preview Template", expanded=False):
+                st.code(selected_template["template"], language="text")
+                st.caption(f"💡 Example: {selected_template['example']}")
+
+            # Fill in template placeholders
+            st.markdown("**Fill in the blanks:**")
+            placeholder_values = {}
+
+            # Create input fields for each placeholder
+            for placeholder, description in selected_template["placeholders"].items():
+                placeholder_values[placeholder] = st.text_input(
+                    f"{placeholder.replace('_', ' ').title()}",
+                    placeholder=description,
+                    key=f"template_{placeholder}"
+                )
+
+            # Store template data in session state
+            if "template_mode" not in st.session_state:
+                st.session_state.template_mode = False
+
+            st.session_state.template_mode = True
+            st.session_state.selected_template = selected_template
+            st.session_state.placeholder_values = placeholder_values
+        else:
+            st.warning(f"No templates available for {selected_category} in {platform}")
+    else:
+        # Clear template mode if unchecked
+        if "template_mode" in st.session_state:
+            st.session_state.template_mode = False
+else:
+    st.info(f"💡 No templates available yet for {platform}. Coming soon!")
+
+st.markdown("---")
+
 col1, col2 = st.columns(2)
 with col1:
-    topic = st.text_input("Topic*", placeholder="AI side-hustles, productivity tips, etc.", help="What should your content be about?")
+    # Make topic optional if using template
+    if st.session_state.get("template_mode", False):
+        topic = st.text_input("Topic (optional with templates)", placeholder="Additional context for AI", help="Optional: Add context to enhance the template")
+    else:
+        topic = st.text_input("Topic*", placeholder="AI side-hustles, productivity tips, etc.", help="What should your content be about?")
 with col2:
     tone = st.selectbox("Tone", ["Casual", "Funny", "Pro", "Degen"], help="Choose the writing style")
 
@@ -475,9 +574,24 @@ else:
     button_text = "🎨 Generate Instagram Carousel"
 
 if st.button(button_text, type="primary", use_container_width=True):
-    if not topic.strip():
+    # Check if using template mode
+    template_mode = st.session_state.get("template_mode", False)
+
+    # Validation: topic required only if not using template
+    if not template_mode and not topic.strip():
         st.warning("⚠️ Please enter a topic")
         st.stop()
+
+    # Check if template placeholders are filled
+    if template_mode:
+        missing_fields = []
+        for key, value in st.session_state.placeholder_values.items():
+            if not value or not value.strip():
+                missing_fields.append(key.replace('_', ' ').title())
+
+        if missing_fields:
+            st.warning(f"⚠️ Please fill in all template fields: {', '.join(missing_fields)}")
+            st.stop()
 
     if not pro and st.session_state.gen_count >= 3:
         st.error("🚫 Free limit reached: 3 generations per day")
@@ -492,7 +606,38 @@ if st.button(button_text, type="primary", use_container_width=True):
     if platform == "X Thread":
         # Generate X Thread
         with st.spinner("🤖 Generating your viral thread..."):
-            prompt = f"""Create a VIRAL X/Twitter thread about: "{topic}"
+            # If using template, fill it in first
+            if template_mode:
+                template_obj = st.session_state.selected_template
+                filled_template = fill_template(template_obj["template"], st.session_state.placeholder_values)
+
+                # Use AI to polish the template if topic provided
+                if topic and topic.strip():
+                    prompt = f"""Enhance this X/Twitter thread with the following context: "{topic}"
+
+Original thread:
+{filled_template}
+
+Requirements:
+- Keep the core message intact
+- Add relevant details based on the context
+- Tone: {tone}
+- Keep each tweet under 280 characters
+- Format: ONE TWEET PER LINE"""
+                else:
+                    # Just format the template as a thread
+                    prompt = f"""Format this content as a {length}-tweet X/Twitter thread:
+
+{filled_template}
+
+Requirements:
+- Tone: {tone}
+- Keep each tweet under 280 characters
+- Format: ONE TWEET PER LINE
+- Maintain the core message"""
+            else:
+                # Standard generation from topic
+                prompt = f"""Create a VIRAL X/Twitter thread about: "{topic}"
 
 Requirements:
 - Exactly {length} tweets
@@ -528,7 +673,40 @@ Requirements:
     elif platform == "LinkedIn Post":
         # Generate LinkedIn Post (Pro feature)
         with st.spinner("💼 Generating your professional LinkedIn post..."):
-            prompt = f"""Create a VIRAL LinkedIn post about: "{topic}"
+            # If using template, fill it in first
+            if template_mode:
+                template_obj = st.session_state.selected_template
+                filled_template = fill_template(template_obj["template"], st.session_state.placeholder_values)
+
+                # Use AI to enhance template if topic provided
+                if topic and topic.strip():
+                    prompt = f"""Enhance this LinkedIn post with additional context: "{topic}"
+
+Original post:
+{filled_template}
+
+Requirements:
+- Keep the core message intact
+- Add relevant details based on the context
+- Tone: {tone}
+- LinkedIn best practices: Professional yet engaging
+- 1300-3000 characters optimal
+- End with 3-5 relevant hashtags"""
+                else:
+                    # Just format and optimize the template
+                    prompt = f"""Optimize this LinkedIn post:
+
+{filled_template}
+
+Requirements:
+- Tone: {tone}
+- LinkedIn best practices applied
+- Add line breaks for readability
+- End with 3-5 relevant hashtags
+- Keep the core message intact"""
+            else:
+                # Standard generation from topic
+                prompt = f"""Create a VIRAL LinkedIn post about: "{topic}"
 
 Requirements:
 - Tone: {tone}
@@ -572,7 +750,39 @@ Requirements:
 
         # Generate Instagram Carousel
         with st.spinner("🎨 Generating your Instagram carousel..."):
-            prompt = f"""Create a VIRAL Instagram carousel about: "{topic}"
+            # If using template, fill it in first
+            if template_mode:
+                template_obj = st.session_state.selected_template
+                filled_template = fill_template(template_obj["template"], st.session_state.placeholder_values)
+
+                # Use AI to enhance template if topic provided
+                if topic and topic.strip():
+                    prompt = f"""Enhance this Instagram carousel with additional context: "{topic}"
+
+Original carousel:
+{filled_template}
+
+Requirements:
+- Keep the core message intact
+- Add relevant details based on the context
+- Tone: {tone}
+- Each slide: SLIDE X: [Title] format
+- Use relevant emojis
+- Make it visually engaging"""
+                else:
+                    # Just optimize the template
+                    prompt = f"""Optimize this Instagram carousel:
+
+{filled_template}
+
+Requirements:
+- Tone: {tone}
+- Each slide: SLIDE X: [Title] format
+- Use relevant emojis
+- Keep the core message intact"""
+            else:
+                # Standard generation from topic
+                prompt = f"""Create a VIRAL Instagram carousel about: "{topic}"
 
 Requirements:
 - Exactly {length} slides
