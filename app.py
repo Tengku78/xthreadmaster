@@ -615,7 +615,7 @@ Requirements:
         st.session_state.thread_history.insert(0, history_entry)
         st.session_state.thread_history = st.session_state.thread_history[:10]
 
-    st.rerun()
+    # Don't rerun - let the error messages display and content show naturally below
 
 # === DISPLAY ===
 if "thread" in st.session_state and st.session_state.thread:
