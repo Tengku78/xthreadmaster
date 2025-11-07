@@ -14,8 +14,9 @@ import base64
 # === CONFIG ===
 # NOTE: genai.configure() is now called lazily in get_model() to prevent deployment hangs
 
-# Get Stripe payment link from secrets (with fallback)
-STRIPE_PAYMENT_LINK = st.secrets.get("STRIPE_PAYMENT_LINK", "#")
+# Get Stripe payment links from secrets (with fallback)
+STRIPE_PRO_LINK = st.secrets.get("STRIPE_PRO_LINK", "#")
+STRIPE_VISUAL_PACK_LINK = st.secrets.get("STRIPE_VISUAL_PACK_LINK", "#")
 
 # === OAUTH TOKEN STORAGE ===
 # Helper functions to store/retrieve OAuth tokens temporarily
@@ -124,8 +125,10 @@ with st.sidebar:
 
     ---
 
-    [Upgrade Now]({STRIPE_PAYMENT_LINK})
-    """.replace("{STRIPE_PAYMENT_LINK}", STRIPE_PAYMENT_LINK))
+    [Upgrade to Pro ($12/mo)]({STRIPE_PRO_LINK})
+
+    [Upgrade to Visual Pack ($17/mo)]({STRIPE_VISUAL_PACK_LINK})
+    """.replace("{STRIPE_PRO_LINK}", STRIPE_PRO_LINK).replace("{STRIPE_VISUAL_PACK_LINK}", STRIPE_VISUAL_PACK_LINK))
 
 # === INITIALIZE SESSION STATE ===
 if "gen_count" not in st.session_state:
@@ -292,10 +295,10 @@ if email and email.strip():
         st.success(f"✅ **Visual Pack Active** - X threads + Instagram carousels with AI images ({remaining_carousels}/100 carousels remaining this month)")
     elif pro:
         st.success("✅ **Pro Account Active** - Unlimited X threads & auto-posting")
-        st.info("💎 Upgrade to Visual Pack ($17/mo) to unlock Instagram carousels with AI-generated images")
+        st.info(f"💎 [Upgrade to Visual Pack ($17/mo)]({STRIPE_VISUAL_PACK_LINK}) to unlock Instagram carousels with AI-generated images")
     else:
         remaining_today = 3 - st.session_state.gen_count
-        st.info(f"🆓 **Free Tier** - {remaining_today} generations remaining today | [Upgrade to Pro]({STRIPE_PAYMENT_LINK}) for unlimited access")
+        st.info(f"🆓 **Free Tier** - {remaining_today} generations remaining today | [Upgrade to Pro]({STRIPE_PRO_LINK}) for unlimited access")
 
 # === OAUTH: STATE PARAMETER (NO SESSION LOSS) ===
 query = st.query_params
@@ -414,7 +417,7 @@ if st.button(button_text, type="primary", use_container_width=True):
 
     if not pro and st.session_state.gen_count >= 3:
         st.error("🚫 Free limit reached: 3 generations per day")
-        st.info(f"💎 [Upgrade to Pro]({STRIPE_PAYMENT_LINK}) for unlimited generations and auto-posting")
+        st.info(f"💎 [Upgrade to Pro]({STRIPE_PRO_LINK}) for unlimited generations and auto-posting")
         st.stop()
 
     if not pro:
@@ -816,4 +819,4 @@ if "carousel" in st.session_state and st.session_state.carousel and st.session_s
         """)
 
 st.markdown("---")
-st.caption(f"Made with ❤️ using Gemini AI • [Upgrade to Pro]({STRIPE_PAYMENT_LINK})")
+st.caption(f"Made with ❤️ using Gemini AI • [Pro ($12)]({STRIPE_PRO_LINK}) • [Visual Pack ($17)]({STRIPE_VISUAL_PACK_LINK})")
