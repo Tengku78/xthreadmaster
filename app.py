@@ -18,6 +18,11 @@ import base64
 STRIPE_PRO_LINK = st.secrets.get("STRIPE_PRO_LINK", "#")
 STRIPE_VISUAL_PACK_LINK = st.secrets.get("STRIPE_VISUAL_PACK_LINK", "#")
 
+# LinkedIn OAuth Configuration
+LINKEDIN_CLIENT_ID = st.secrets.get("LINKEDIN_CLIENT_ID", "")
+LINKEDIN_CLIENT_SECRET = st.secrets.get("LINKEDIN_CLIENT_SECRET", "")
+LINKEDIN_REDIRECT_URI = "https://xthreadmaster.streamlit.app"
+
 # === OAUTH TOKEN STORAGE ===
 # Helper functions to store/retrieve OAuth tokens temporarily
 def save_oauth_secret(oauth_token, oauth_secret):
@@ -60,6 +65,53 @@ def cleanup_oauth_secret(oauth_token):
     """Remove OAuth secret file after use"""
     temp_dir = tempfile.gettempdir()
     filepath = os.path.join(temp_dir, f"xthread_oauth_{oauth_token}.json")
+    try:
+        if os.path.exists(filepath):
+            os.remove(filepath)
+    except:
+        pass
+
+# LinkedIn OAuth state storage (uses same pattern as X OAuth)
+def save_linkedin_state(state, data):
+    """Save LinkedIn OAuth state to temporary file"""
+    temp_dir = tempfile.gettempdir()
+    filepath = os.path.join(temp_dir, f"linkedin_state_{state}.json")
+    data_with_timestamp = {
+        **data,
+        "timestamp": datetime.now().isoformat()
+    }
+    with open(filepath, 'w') as f:
+        json.dump(data_with_timestamp, f)
+    return filepath
+
+def get_linkedin_state(state):
+    """Retrieve LinkedIn OAuth state from temporary file"""
+    temp_dir = tempfile.gettempdir()
+    filepath = os.path.join(temp_dir, f"linkedin_state_{state}.json")
+
+    if not os.path.exists(filepath):
+        return None
+
+    try:
+        with open(filepath, 'r') as f:
+            data = json.load(f)
+
+        # Check if state is less than 10 minutes old
+        timestamp = datetime.fromisoformat(data['timestamp'])
+        age = (datetime.now() - timestamp).total_seconds()
+
+        if age > 600:  # 10 minutes
+            os.remove(filepath)
+            return None
+
+        return data
+    except Exception:
+        return None
+
+def cleanup_linkedin_state(state):
+    """Remove LinkedIn OAuth state file after use"""
+    temp_dir = tempfile.gettempdir()
+    filepath = os.path.join(temp_dir, f"linkedin_state_{state}.json")
     try:
         if os.path.exists(filepath):
             os.remove(filepath)
@@ -111,6 +163,7 @@ with st.sidebar:
 
     ### 💎 Pro ($12/mo)
     - ♾️ Unlimited X threads
+    - 💼 LinkedIn posts (B2B content)
     - 🚀 One-click auto-posting to X
     - 🔗 X account integration
     - ✏️ Edit before posting
@@ -141,6 +194,8 @@ if "carousel_last_reset" not in st.session_state:
     st.session_state.carousel_last_reset = date.today()
 if "x_logged_in" not in st.session_state:
     st.session_state.x_logged_in = False
+if "linkedin_logged_in" not in st.session_state:
+    st.session_state.linkedin_logged_in = False
 if "thread" not in st.session_state:
     st.session_state.thread = None
 if "carousel" not in st.session_state:
@@ -248,6 +303,8 @@ st.subheader("📝 Content Settings")
 
 # Platform selector
 platform_options = ["X Thread"]
+if pro:  # LinkedIn available for Pro+ users
+    platform_options.append("LinkedIn Post")
 if visual_pack:
     platform_options.append("Instagram Carousel")
 
@@ -266,6 +323,8 @@ with col2:
 # Dynamic length slider based on platform
 if platform == "X Thread":
     length = st.slider("Thread Length (tweets)", 5, 15, 8, help="Number of tweets in your thread")
+elif platform == "LinkedIn Post":
+    length = None  # LinkedIn posts are single-format
 else:  # Instagram Carousel
     length = st.slider("Carousel Length (slides)", 5, 10, 7, help="Number of slides in your carousel")
 
@@ -408,7 +467,12 @@ if st.session_state.get("x_logged_in") and (not email or not email.strip()):
 st.markdown("---")
 
 # Dynamic button text
-button_text = "✨ Generate Viral Thread" if platform == "X Thread" else "🎨 Generate Instagram Carousel"
+if platform == "X Thread":
+    button_text = "✨ Generate Viral Thread"
+elif platform == "LinkedIn Post":
+    button_text = "💼 Generate LinkedIn Post"
+else:
+    button_text = "🎨 Generate Instagram Carousel"
 
 if st.button(button_text, type="primary", use_container_width=True):
     if not topic.strip():
@@ -460,6 +524,43 @@ Requirements:
         st.session_state.thread = thread
         st.session_state.platform = "X Thread"
         st.session_state.remaining = remaining
+
+    elif platform == "LinkedIn Post":
+        # Generate LinkedIn Post (Pro feature)
+        with st.spinner("💼 Generating your professional LinkedIn post..."):
+            prompt = f"""Create a VIRAL LinkedIn post about: "{topic}"
+
+Requirements:
+- Tone: {tone}
+- LinkedIn best practices: Hook in first line, value-driven content
+- 1300-3000 characters (LinkedIn optimal length)
+- Professional yet engaging
+- Include relevant emojis (LinkedIn-appropriate)
+- Structure: Hook → Story/Insight → Value → CTA
+- Use line breaks for readability
+- End with 3-5 relevant hashtags
+- Make it shareable and comment-worthy"""
+
+            try:
+                model = get_or_create_model()
+                linkedin_post = model.generate_content(prompt).text.strip()
+            except Exception as e:
+                error_msg = str(e)
+                if "429" in error_msg or "Resource exhausted" in error_msg:
+                    st.error("⏱️ **API Rate Limit Reached**")
+                    st.warning("The AI service is temporarily at capacity.")
+                    st.info("""
+                    **Solutions:**
+                    1. Wait 1-2 hours and try again
+                    2. Upgrade your Google AI API to paid tier
+                    3. Contact support if this persists
+                    """)
+                else:
+                    st.error(f"❌ AI generation failed: {error_msg}")
+                st.stop()
+
+        st.session_state.thread = linkedin_post
+        st.session_state.platform = "LinkedIn Post"
 
     else:  # Instagram Carousel
         # Check carousel monthly limit (100/month soft cap)
@@ -626,7 +727,11 @@ Requirements:
 # === DISPLAY ===
 if "thread" in st.session_state and st.session_state.thread:
     st.markdown("---")
-    st.subheader("🎉 Your Viral Thread")
+    # Dynamic title based on platform
+    if st.session_state.get("platform") == "LinkedIn Post":
+        st.subheader("💼 Your LinkedIn Post")
+    else:
+        st.subheader("🎉 Your Viral Thread")
 
     # Edit mode (Pro only)
     if pro:
