@@ -165,6 +165,355 @@ def get_or_create_model():
 
 st.set_page_config(page_title="XThreadMaster", page_icon="🚀", layout="centered")
 
+# === CUSTOM CSS - GLASS MORPHISM UI ===
+st.markdown("""
+<style>
+    /* Import Google Fonts */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+    /* Global Styles */
+    * {
+        font-family: 'Inter', sans-serif;
+    }
+
+    /* Main container background gradient */
+    .stApp {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background-attachment: fixed;
+    }
+
+    /* Glass morphism cards */
+    .glass-card {
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        padding: 2rem;
+        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        margin: 1rem 0;
+    }
+
+    /* Main content area */
+    .block-container {
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(10px);
+        border-radius: 30px;
+        padding: 2rem !important;
+        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+    }
+
+    /* Title styling */
+    h1 {
+        background: linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        font-weight: 700;
+        font-size: 3rem !important;
+        text-align: center;
+        margin-bottom: 0.5rem !important;
+        letter-spacing: -1px;
+    }
+
+    /* Subtitle */
+    .subtitle {
+        text-align: center;
+        color: rgba(255, 255, 255, 0.8);
+        font-size: 1.1rem;
+        font-weight: 400;
+        margin-bottom: 2rem;
+    }
+
+    /* Subheaders */
+    h2, h3 {
+        color: white !important;
+        font-weight: 600 !important;
+    }
+
+    /* Input fields */
+    .stTextInput > div > div > input,
+    .stTextArea > div > div > textarea,
+    .stSelectbox > div > div > select {
+        background: rgba(255, 255, 255, 0.15) !important;
+        border: 1px solid rgba(255, 255, 255, 0.3) !important;
+        border-radius: 12px !important;
+        color: white !important;
+        backdrop-filter: blur(10px);
+        padding: 0.75rem !important;
+        font-size: 0.95rem !important;
+    }
+
+    .stTextInput > div > div > input::placeholder,
+    .stTextArea > div > div > textarea::placeholder {
+        color: rgba(255, 255, 255, 0.5) !important;
+    }
+
+    .stTextInput > div > div > input:focus,
+    .stTextArea > div > div > textarea:focus {
+        border-color: rgba(255, 255, 255, 0.6) !important;
+        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1) !important;
+    }
+
+    /* Labels */
+    label {
+        color: white !important;
+        font-weight: 500 !important;
+        font-size: 0.9rem !important;
+        margin-bottom: 0.5rem !important;
+    }
+
+    /* Primary buttons */
+    .stButton > button[kind="primary"] {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 12px !important;
+        padding: 0.75rem 2rem !important;
+        font-weight: 600 !important;
+        font-size: 1rem !important;
+        box-shadow: 0 4px 15px 0 rgba(102, 126, 234, 0.4) !important;
+        transition: all 0.3s ease !important;
+    }
+
+    .stButton > button[kind="primary"]:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px 0 rgba(102, 126, 234, 0.6) !important;
+    }
+
+    /* Secondary buttons */
+    .stButton > button[kind="secondary"] {
+        background: rgba(255, 255, 255, 0.15) !important;
+        color: white !important;
+        border: 1px solid rgba(255, 255, 255, 0.3) !important;
+        border-radius: 12px !important;
+        padding: 0.75rem 2rem !important;
+        font-weight: 500 !important;
+        backdrop-filter: blur(10px);
+        transition: all 0.3s ease !important;
+    }
+
+    .stButton > button[kind="secondary"]:hover {
+        background: rgba(255, 255, 255, 0.25) !important;
+        border-color: rgba(255, 255, 255, 0.5) !important;
+        transform: translateY(-2px);
+    }
+
+    /* Regular buttons */
+    .stButton > button {
+        background: rgba(255, 255, 255, 0.1) !important;
+        color: white !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        border-radius: 12px !important;
+        padding: 0.5rem 1.5rem !important;
+        font-weight: 500 !important;
+        backdrop-filter: blur(10px);
+        transition: all 0.3s ease !important;
+    }
+
+    .stButton > button:hover {
+        background: rgba(255, 255, 255, 0.2) !important;
+        transform: translateY(-2px);
+    }
+
+    /* Download button */
+    .stDownloadButton > button {
+        background: rgba(76, 175, 80, 0.2) !important;
+        color: white !important;
+        border: 1px solid rgba(76, 175, 80, 0.4) !important;
+        border-radius: 12px !important;
+        padding: 0.75rem 2rem !important;
+        font-weight: 500 !important;
+        backdrop-filter: blur(10px);
+        transition: all 0.3s ease !important;
+    }
+
+    .stDownloadButton > button:hover {
+        background: rgba(76, 175, 80, 0.3) !important;
+        transform: translateY(-2px);
+    }
+
+    /* Expander */
+    .streamlit-expanderHeader {
+        background: rgba(255, 255, 255, 0.1) !important;
+        border-radius: 12px !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        color: white !important;
+        font-weight: 500 !important;
+        backdrop-filter: blur(10px);
+    }
+
+    .streamlit-expanderHeader:hover {
+        background: rgba(255, 255, 255, 0.15) !important;
+    }
+
+    .streamlit-expanderContent {
+        background: rgba(255, 255, 255, 0.05) !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        border-top: none !important;
+        border-radius: 0 0 12px 12px !important;
+        backdrop-filter: blur(10px);
+    }
+
+    /* Alerts and messages */
+    .stSuccess, .stInfo, .stWarning, .stError {
+        background: rgba(255, 255, 255, 0.1) !important;
+        backdrop-filter: blur(10px) !important;
+        border-radius: 12px !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        padding: 1rem !important;
+    }
+
+    .stSuccess {
+        border-left: 4px solid #4caf50 !important;
+    }
+
+    .stInfo {
+        border-left: 4px solid #2196f3 !important;
+    }
+
+    .stWarning {
+        border-left: 4px solid #ff9800 !important;
+    }
+
+    .stError {
+        border-left: 4px solid #f44336 !important;
+    }
+
+    /* Metrics */
+    [data-testid="stMetricValue"] {
+        color: white !important;
+        font-size: 2rem !important;
+        font-weight: 700 !important;
+    }
+
+    [data-testid="stMetricLabel"] {
+        color: rgba(255, 255, 255, 0.8) !important;
+        font-size: 0.9rem !important;
+        font-weight: 500 !important;
+    }
+
+    /* Progress bars */
+    .stProgress > div > div > div {
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%) !important;
+        border-radius: 10px !important;
+    }
+
+    /* Slider */
+    .stSlider > div > div > div {
+        background: rgba(255, 255, 255, 0.2) !important;
+    }
+
+    .stSlider > div > div > div > div {
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%) !important;
+    }
+
+    /* Radio buttons */
+    .stRadio > div {
+        background: rgba(255, 255, 255, 0.05) !important;
+        border-radius: 12px !important;
+        padding: 0.5rem !important;
+    }
+
+    .stRadio > div > label {
+        color: white !important;
+    }
+
+    /* Tabs */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 0.5rem;
+        background: rgba(255, 255, 255, 0.05) !important;
+        border-radius: 12px !important;
+        padding: 0.5rem !important;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        background: rgba(255, 255, 255, 0.1) !important;
+        border-radius: 8px !important;
+        color: white !important;
+        font-weight: 500 !important;
+        padding: 0.5rem 1rem !important;
+    }
+
+    .stTabs [aria-selected="true"] {
+        background: rgba(255, 255, 255, 0.25) !important;
+    }
+
+    /* Sidebar */
+    [data-testid="stSidebar"] {
+        background: rgba(255, 255, 255, 0.1) !important;
+        backdrop-filter: blur(20px) !important;
+        border-right: 1px solid rgba(255, 255, 255, 0.2) !important;
+    }
+
+    [data-testid="stSidebar"] .block-container {
+        background: transparent !important;
+        box-shadow: none !important;
+    }
+
+    /* Divider */
+    hr {
+        border-color: rgba(255, 255, 255, 0.2) !important;
+        margin: 2rem 0 !important;
+    }
+
+    /* Select boxes */
+    .stSelectbox > div > div {
+        background: rgba(255, 255, 255, 0.15) !important;
+        border: 1px solid rgba(255, 255, 255, 0.3) !important;
+        border-radius: 12px !important;
+        backdrop-filter: blur(10px);
+    }
+
+    /* Code/Text areas */
+    .stTextArea textarea {
+        background: rgba(0, 0, 0, 0.3) !important;
+        color: white !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        border-radius: 12px !important;
+        font-family: 'Monaco', 'Menlo', monospace !important;
+    }
+
+    /* Captions */
+    .caption {
+        color: rgba(255, 255, 255, 0.7) !important;
+        font-size: 0.85rem !important;
+    }
+
+    /* Links */
+    a {
+        color: #a8c5ff !important;
+        text-decoration: none !important;
+        transition: color 0.3s ease !important;
+    }
+
+    a:hover {
+        color: #ffffff !important;
+        text-decoration: underline !important;
+    }
+
+    /* Spinner */
+    .stSpinner > div {
+        border-color: rgba(255, 255, 255, 0.3) !important;
+        border-top-color: white !important;
+    }
+
+    /* Columns */
+    [data-testid="column"] {
+        background: transparent !important;
+    }
+
+    /* Card effect for content sections */
+    .content-card {
+        background: rgba(255, 255, 255, 0.08) !important;
+        backdrop-filter: blur(10px);
+        border-radius: 16px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        padding: 1.5rem;
+        margin: 1rem 0;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # === SIDEBAR ===
 # Note: Sidebar content is rendered after user_tier is determined (see below after line 400)
 
@@ -192,7 +541,7 @@ if "platform" not in st.session_state:
 # Thread history now stored in Supabase (removed session state)
 
 st.title("🚀 XThreadMaster")
-st.markdown("Generate viral X threads in seconds with AI")
+st.markdown('<p class="subtitle">Generate viral content for X, LinkedIn & Instagram with AI</p>', unsafe_allow_html=True)
 st.markdown("---")
 
 # === INPUTS ===
@@ -645,17 +994,50 @@ if pro:
         else:
             st.caption("Generate content to see your history here!")
 
-# Show subscription status
+# Show subscription status with enhanced styling
 if email and email.strip():
     if visual_pack:
         remaining_carousels = 100 - st.session_state.carousel_count
-        st.success(f"✅ **Visual Pack Active** - X threads + Instagram carousels with AI images ({remaining_carousels}/100 carousels remaining this month)")
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, rgba(156, 39, 176, 0.2) 0%, rgba(103, 58, 183, 0.2) 100%);
+                    backdrop-filter: blur(10px); border-radius: 16px; padding: 1.25rem;
+                    border: 2px solid rgba(156, 39, 176, 0.4); margin: 1rem 0;">
+            <h3 style="margin: 0; color: white; font-size: 1.1rem; font-weight: 600;">
+                ✨ Visual Pack Active
+            </h3>
+            <p style="margin: 0.5rem 0 0 0; color: rgba(255, 255, 255, 0.9); font-size: 0.95rem;">
+                Unlimited X threads + Instagram carousels with AI images ({remaining_carousels}/100 carousels this month)
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
     elif pro:
-        st.success("✅ **Pro Account Active** - Unlimited X threads & auto-posting")
-        st.info(f"💎 [Upgrade to Visual Pack ($17/mo)]({STRIPE_VISUAL_PACK_LINK}) to unlock Instagram carousels with AI-generated images")
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, rgba(33, 150, 243, 0.2) 0%, rgba(102, 126, 234, 0.2) 100%);
+                    backdrop-filter: blur(10px); border-radius: 16px; padding: 1.25rem;
+                    border: 2px solid rgba(33, 150, 243, 0.4); margin: 1rem 0;">
+            <h3 style="margin: 0; color: white; font-size: 1.1rem; font-weight: 600;">
+                💎 Pro Account Active
+            </h3>
+            <p style="margin: 0.5rem 0 0 0; color: rgba(255, 255, 255, 0.9); font-size: 0.95rem;">
+                Unlimited X threads, LinkedIn posts & auto-posting enabled
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+        st.info(f"🚀 [Upgrade to Visual Pack ($17/mo)]({STRIPE_VISUAL_PACK_LINK}) to unlock Instagram carousels with AI-generated images")
     else:
         remaining_today = 3 - st.session_state.gen_count
-        st.info(f"🆓 **Free Tier** - {remaining_today} generations remaining today | [Upgrade to Pro]({STRIPE_PRO_LINK}) for unlimited access")
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, rgba(255, 152, 0, 0.15) 0%, rgba(255, 193, 7, 0.15) 100%);
+                    backdrop-filter: blur(10px); border-radius: 16px; padding: 1.25rem;
+                    border: 2px solid rgba(255, 152, 0, 0.3); margin: 1rem 0;">
+            <h3 style="margin: 0; color: white; font-size: 1.1rem; font-weight: 600;">
+                🆓 Free Tier
+            </h3>
+            <p style="margin: 0.5rem 0 0 0; color: rgba(255, 255, 255, 0.9); font-size: 0.95rem;">
+                {remaining_today} generations remaining today • <a href="{STRIPE_PRO_LINK}" style="color: #a8c5ff; text-decoration: underline;">Upgrade to Pro</a> for unlimited access
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
 
 # === OAUTH: STATE PARAMETER (NO SESSION LOSS) ===
 query = st.query_params
@@ -814,10 +1196,18 @@ if pro:
 
     # LOGGED IN
     else:
-        col1, col2 = st.columns([2, 1])
         username = st.session_state.get("x_username", "Unknown")
+        col1, col2 = st.columns([3, 1])
         with col1:
-            st.success(f"✅ Connected as @{username}")
+            st.markdown(f"""
+            <div style="background: linear-gradient(135deg, rgba(29, 161, 242, 0.2) 0%, rgba(29, 161, 242, 0.1) 100%);
+                        backdrop-filter: blur(10px); border-radius: 12px; padding: 1rem;
+                        border: 1px solid rgba(29, 161, 242, 0.3);">
+                <p style="margin: 0; color: white; font-weight: 500;">
+                    ✅ Connected as <strong style="color: #1DA1F2;">@{username}</strong>
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
         with col2:
             if st.button("Disconnect", use_container_width=True):
                 for k in ["x_access_token", "x_access_secret", "x_username", "x_logged_in"]:
@@ -855,10 +1245,18 @@ if pro:
 
     # LOGGED IN
     else:
-        col1, col2 = st.columns([2, 1])
         linkedin_name = st.session_state.get("linkedin_name", "Unknown")
+        col1, col2 = st.columns([3, 1])
         with col1:
-            st.success(f"✅ Connected as {linkedin_name}")
+            st.markdown(f"""
+            <div style="background: linear-gradient(135deg, rgba(0, 119, 181, 0.2) 0%, rgba(0, 119, 181, 0.1) 100%);
+                        backdrop-filter: blur(10px); border-radius: 12px; padding: 1rem;
+                        border: 1px solid rgba(0, 119, 181, 0.3);">
+                <p style="margin: 0; color: white; font-weight: 500;">
+                    ✅ Connected as <strong style="color: #0077B5;">{linkedin_name}</strong>
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
         with col2:
             if st.button("Disconnect LinkedIn", use_container_width=True):
                 for k in ["linkedin_access_token", "linkedin_person_id", "linkedin_name", "linkedin_logged_in"]:
@@ -1602,4 +2000,14 @@ if "carousel" in st.session_state and st.session_state.carousel and st.session_s
         """)
 
 st.markdown("---")
-st.markdown(f"<p style='text-align: center; color: gray; font-size: 14px;'>Made with ❤️ using Gemini AI • <a href='{STRIPE_PRO_LINK}' target='_blank'>Pro ($12)</a> • <a href='{STRIPE_VISUAL_PACK_LINK}' target='_blank'>Visual Pack ($17)</a></p>", unsafe_allow_html=True)
+st.markdown(f"""
+<div style="text-align: center; margin-top: 3rem; padding: 2rem 0;">
+    <p style='color: rgba(255, 255, 255, 0.6); font-size: 0.9rem; margin-bottom: 0.5rem;'>
+        Made with ❤️ using Gemini AI
+    </p>
+    <p style='color: rgba(255, 255, 255, 0.5); font-size: 0.85rem;'>
+        <a href='{STRIPE_PRO_LINK}' target='_blank' style='color: #a8c5ff; text-decoration: none; margin: 0 0.5rem;'>💎 Pro ($12/mo)</a> •
+        <a href='{STRIPE_VISUAL_PACK_LINK}' target='_blank' style='color: #a8c5ff; text-decoration: none; margin: 0 0.5rem;'>✨ Visual Pack ($17/mo)</a>
+    </p>
+</div>
+""", unsafe_allow_html=True)
