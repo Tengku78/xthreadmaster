@@ -176,9 +176,9 @@ st.markdown("""
         font-family: 'Inter', sans-serif;
     }
 
-    /* Main container background gradient */
+    /* Main container background - sleek black */
     .stApp {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: #0a0a0a;
         background-attachment: fixed;
     }
 
@@ -195,11 +195,12 @@ st.markdown("""
 
     /* Main content area */
     .block-container {
-        background: rgba(255, 255, 255, 0.05);
-        backdrop-filter: blur(10px);
+        background: rgba(255, 255, 255, 0.03);
+        backdrop-filter: blur(20px);
         border-radius: 30px;
         padding: 2rem !important;
-        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.1);
     }
 
     /* Title styling */
@@ -264,20 +265,20 @@ st.markdown("""
 
     /* Primary buttons */
     .stButton > button[kind="primary"] {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
         color: white !important;
         border: none !important;
         border-radius: 12px !important;
         padding: 0.75rem 2rem !important;
         font-weight: 600 !important;
         font-size: 1rem !important;
-        box-shadow: 0 4px 15px 0 rgba(102, 126, 234, 0.4) !important;
+        box-shadow: 0 4px 15px 0 rgba(99, 102, 241, 0.5) !important;
         transition: all 0.3s ease !important;
     }
 
     .stButton > button[kind="primary"]:hover {
         transform: translateY(-2px);
-        box-shadow: 0 6px 20px 0 rgba(102, 126, 234, 0.6) !important;
+        box-shadow: 0 6px 20px 0 rgba(99, 102, 241, 0.7) !important;
     }
 
     /* Secondary buttons */
@@ -394,7 +395,7 @@ st.markdown("""
 
     /* Progress bars */
     .stProgress > div > div > div {
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%) !important;
+        background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 100%) !important;
         border-radius: 10px !important;
     }
 
@@ -404,7 +405,7 @@ st.markdown("""
     }
 
     .stSlider > div > div > div > div {
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%) !important;
+        background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 100%) !important;
     }
 
     /* Radio buttons */
@@ -440,9 +441,9 @@ st.markdown("""
 
     /* Sidebar */
     [data-testid="stSidebar"] {
-        background: rgba(255, 255, 255, 0.1) !important;
+        background: rgba(255, 255, 255, 0.05) !important;
         backdrop-filter: blur(20px) !important;
-        border-right: 1px solid rgba(255, 255, 255, 0.2) !important;
+        border-right: 1px solid rgba(255, 255, 255, 0.1) !important;
     }
 
     [data-testid="stSidebar"] .block-container {
@@ -999,10 +1000,10 @@ if email and email.strip():
     if visual_pack:
         remaining_carousels = 100 - st.session_state.carousel_count
         st.markdown(f"""
-        <div style="background: linear-gradient(135deg, rgba(156, 39, 176, 0.2) 0%, rgba(103, 58, 183, 0.2) 100%);
+        <div style="background: rgba(139, 92, 246, 0.1);
                     backdrop-filter: blur(10px); border-radius: 16px; padding: 1.25rem;
-                    border: 2px solid rgba(156, 39, 176, 0.4); margin: 1rem 0;">
-            <h3 style="margin: 0; color: white; font-size: 1.1rem; font-weight: 600;">
+                    border: 2px solid rgba(139, 92, 246, 0.5); margin: 1rem 0;">
+            <h3 style="margin: 0; color: #a78bfa; font-size: 1.1rem; font-weight: 600;">
                 ✨ Visual Pack Active
             </h3>
             <p style="margin: 0.5rem 0 0 0; color: rgba(255, 255, 255, 0.9); font-size: 0.95rem;">
@@ -1012,10 +1013,10 @@ if email and email.strip():
         """, unsafe_allow_html=True)
     elif pro:
         st.markdown(f"""
-        <div style="background: linear-gradient(135deg, rgba(33, 150, 243, 0.2) 0%, rgba(102, 126, 234, 0.2) 100%);
+        <div style="background: rgba(99, 102, 241, 0.1);
                     backdrop-filter: blur(10px); border-radius: 16px; padding: 1.25rem;
-                    border: 2px solid rgba(33, 150, 243, 0.4); margin: 1rem 0;">
-            <h3 style="margin: 0; color: white; font-size: 1.1rem; font-weight: 600;">
+                    border: 2px solid rgba(99, 102, 241, 0.5); margin: 1rem 0;">
+            <h3 style="margin: 0; color: #818cf8; font-size: 1.1rem; font-weight: 600;">
                 💎 Pro Account Active
             </h3>
             <p style="margin: 0.5rem 0 0 0; color: rgba(255, 255, 255, 0.9); font-size: 0.95rem;">
@@ -1027,14 +1028,14 @@ if email and email.strip():
     else:
         remaining_today = 3 - st.session_state.gen_count
         st.markdown(f"""
-        <div style="background: linear-gradient(135deg, rgba(255, 152, 0, 0.15) 0%, rgba(255, 193, 7, 0.15) 100%);
+        <div style="background: rgba(251, 146, 60, 0.1);
                     backdrop-filter: blur(10px); border-radius: 16px; padding: 1.25rem;
-                    border: 2px solid rgba(255, 152, 0, 0.3); margin: 1rem 0;">
-            <h3 style="margin: 0; color: white; font-size: 1.1rem; font-weight: 600;">
+                    border: 2px solid rgba(251, 146, 60, 0.5); margin: 1rem 0;">
+            <h3 style="margin: 0; color: #fb923c; font-size: 1.1rem; font-weight: 600;">
                 🆓 Free Tier
             </h3>
             <p style="margin: 0.5rem 0 0 0; color: rgba(255, 255, 255, 0.9); font-size: 0.95rem;">
-                {remaining_today} generations remaining today • <a href="{STRIPE_PRO_LINK}" style="color: #a8c5ff; text-decoration: underline;">Upgrade to Pro</a> for unlimited access
+                {remaining_today} generations remaining today • <a href="{STRIPE_PRO_LINK}" style="color: #818cf8; text-decoration: underline;">Upgrade to Pro</a> for unlimited access
             </p>
         </div>
         """, unsafe_allow_html=True)
@@ -1200,11 +1201,11 @@ if pro:
         col1, col2 = st.columns([3, 1])
         with col1:
             st.markdown(f"""
-            <div style="background: linear-gradient(135deg, rgba(29, 161, 242, 0.2) 0%, rgba(29, 161, 242, 0.1) 100%);
+            <div style="background: rgba(29, 161, 242, 0.1);
                         backdrop-filter: blur(10px); border-radius: 12px; padding: 1rem;
-                        border: 1px solid rgba(29, 161, 242, 0.3);">
-                <p style="margin: 0; color: white; font-weight: 500;">
-                    ✅ Connected as <strong style="color: #1DA1F2;">@{username}</strong>
+                        border: 1px solid rgba(29, 161, 242, 0.4);">
+                <p style="margin: 0; color: rgba(255, 255, 255, 0.9); font-weight: 500;">
+                    ✅ Connected as <strong style="color: #60a5fa;">@{username}</strong>
                 </p>
             </div>
             """, unsafe_allow_html=True)
@@ -1249,11 +1250,11 @@ if pro:
         col1, col2 = st.columns([3, 1])
         with col1:
             st.markdown(f"""
-            <div style="background: linear-gradient(135deg, rgba(0, 119, 181, 0.2) 0%, rgba(0, 119, 181, 0.1) 100%);
+            <div style="background: rgba(0, 119, 181, 0.1);
                         backdrop-filter: blur(10px); border-radius: 12px; padding: 1rem;
-                        border: 1px solid rgba(0, 119, 181, 0.3);">
-                <p style="margin: 0; color: white; font-weight: 500;">
-                    ✅ Connected as <strong style="color: #0077B5;">{linkedin_name}</strong>
+                        border: 1px solid rgba(0, 119, 181, 0.4);">
+                <p style="margin: 0; color: rgba(255, 255, 255, 0.9); font-weight: 500;">
+                    ✅ Connected as <strong style="color: #38bdf8;">{linkedin_name}</strong>
                 </p>
             </div>
             """, unsafe_allow_html=True)
