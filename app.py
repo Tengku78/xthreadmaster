@@ -699,9 +699,12 @@ if pro:
                     st.session_state.pop(k, None)
                 st.rerun()
 
-# Show helpful message if X is connected but not showing as Pro (email missing)
+# Show helpful messages if accounts are connected but email is missing
 if st.session_state.get("x_logged_in") and (not email or not email.strip()):
     st.info("😊 **You're connected to X!** Just re-enter your Pro email in Account Settings above to unlock all features!")
+
+if st.session_state.get("linkedin_logged_in") and (not email or not email.strip()):
+    st.info("😊 **You're connected to LinkedIn!** Just re-enter your Pro email in Account Settings above to unlock all features!")
 
 # === RENDER SIDEBAR ===
 with st.sidebar:
